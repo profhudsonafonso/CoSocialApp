@@ -1,0 +1,865 @@
+"use client"
+
+import { 
+  Lightbulb, 
+  ClipboardCheck, 
+  Users, 
+  Wrench, 
+  Rocket, 
+  FileCheck, 
+  TrendingUp, 
+  Building2, 
+  Award,
+  Github,
+  Trello,
+  FileText,
+  Search,
+  Target,
+  Gem,
+  Package,
+  BarChart3,
+  UsersRound,
+  ClipboardList,
+  Calculator,
+  ChevronRight,
+  Menu,
+  X
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { useState } from "react"
+
+const navLinks = [
+  { href: "#como-funciona", label: "Como Funciona" },
+  { href: "#colabscore", label: "ColabScore" },
+  { href: "#dashboard", label: "Dashboard" },
+  { href: "#toolkit", label: "Toolkit" },
+]
+
+const processSteps = [
+  { icon: Lightbulb, title: "Ideia cadastrada", description: "Registre sua proposta inovadora" },
+  { icon: ClipboardCheck, title: "Avaliação inicial", description: "Análise de viabilidade e potencial" },
+  { icon: Users, title: "Formação de squad", description: "Monte sua equipe ideal" },
+  { icon: Wrench, title: "Execução em ferramentas", description: "GitHub, Trello, Jira, Notion" },
+  { icon: Rocket, title: "Desenvolvimento do MVP", description: "Construção do produto mínimo" },
+  { icon: FileCheck, title: "Registro de evidências", description: "Documentação no ColabScore" },
+  { icon: TrendingUp, title: "Validação comercial", description: "Testes de mercado e ajustes" },
+  { icon: Building2, title: "Spin-off da empresa", description: "Formalização do negócio" },
+  { icon: Award, title: "Participação futura", description: "Recompensas por contribuição" },
+]
+
+const colabScoreData = [
+  { projeto: "EducaSaaS", colaborador: "Ana Silva", funcao: "Front-end", pontos: 780, participacao: "12.5%" },
+  { projeto: "FinControl", colaborador: "Carlos Santos", funcao: "Back-end", pontos: 650, participacao: "10.2%" },
+  { projeto: "HealthTrack", colaborador: "Marina Costa", funcao: "UX Design", pontos: 420, participacao: "8.7%" },
+]
+
+const dashboardProjects = [
+  { projeto: "EducaSaaS", estagio: "MVP", colaboradores: 6, pontos: 4250, valor: "R$ 85.000" },
+  { projeto: "FinControl", estagio: "Validação", colaboradores: 4, pontos: 2800, valor: "R$ 56.000" },
+  { projeto: "HealthTrack", estagio: "Ideação", colaboradores: 3, pontos: 1200, valor: "R$ 24.000" },
+]
+
+const educaSaasTeam = [
+  { nome: "Ana Silva", funcao: "Front-end", entregas: 45, pontos: 780, participacao: "18.4%" },
+  { nome: "Bruno Lima", funcao: "Back-end", entregas: 38, pontos: 720, participacao: "16.9%" },
+  { nome: "Carla Mendes", funcao: "UX Design", entregas: 28, pontos: 580, participacao: "13.6%" },
+  { nome: "Diego Souza", funcao: "DevOps", entregas: 22, pontos: 450, participacao: "10.6%" },
+  { nome: "Elena Rocha", funcao: "QA", entregas: 35, pontos: 520, participacao: "12.2%" },
+  { nome: "Fernando Alves", funcao: "PM", entregas: 42, pontos: 680, participacao: "16.0%" },
+]
+
+const availableTasks = [
+  { tarefa: "Implementar autenticação OAuth", perfil: "Back-end", pontos: 45 },
+  { tarefa: "Design do dashboard mobile", perfil: "UX Design", pontos: 35 },
+  { tarefa: "Testes de integração API", perfil: "QA", pontos: 28 },
+  { tarefa: "Configurar CI/CD pipeline", perfil: "DevOps", pontos: 40 },
+]
+
+const toolkitSteps = [
+  { icon: Search, title: "Entender problema", action: "Abrir checklist" },
+  { icon: Target, title: "Validar público", action: "Ver template" },
+  { icon: Gem, title: "Proposta de valor", action: "Preencher canvas" },
+  { icon: Package, title: "Criar MVP", action: "Ver guia" },
+  { icon: BarChart3, title: "Medir evidências", action: "Abrir métricas" },
+  { icon: UsersRound, title: "Organizar squad", action: "Ver papéis" },
+  { icon: ClipboardList, title: "Registrar entregas", action: "Abrir tracker" },
+  { icon: Calculator, title: "Calcular recompensas", action: "Ver scorecard" },
+]
+
+function Navbar() {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <a href="#" className="flex items-center gap-2">
+            <img 
+              src="https://github.com/user-attachments/assets/60d250d7-68db-4a00-80d4-0dc1d6ef78e4" 
+              alt="ColabSocial Logo" 
+              className="h-8 w-8"
+            />
+            <span className="font-bold text-lg text-foreground">ColabSocial</span>
+          </a>
+          
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <a 
+                key={link.href}
+                href={link.href} 
+                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            <Button variant="ghost" size="sm" asChild>
+              <a href="#cadastrar-ideia">Cadastrar Ideia</a>
+            </Button>
+            <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
+              <a href="#colaborar">Colaborar</a>
+            </Button>
+          </div>
+
+          <button 
+            className="md:hidden p-2 text-foreground"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+
+        {isOpen && (
+          <div className="md:hidden py-4 border-t border-border">
+            <div className="flex flex-col gap-4">
+              {navLinks.map((link) => (
+                <a 
+                  key={link.href}
+                  href={link.href} 
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  {link.label}
+                </a>
+              ))}
+              <div className="flex flex-col gap-2 pt-4 border-t border-border">
+                <Button variant="outline" size="sm" asChild>
+                  <a href="#cadastrar-ideia">Cadastrar Ideia</a>
+                </Button>
+                <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
+                  <a href="#colaborar">Colaborar</a>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  )
+}
+
+function HeroSection() {
+  return (
+    <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
+      {/* Background gradient effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-secondary/10" />
+      <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary/30 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 left-1/4 w-64 h-64 bg-secondary/20 rounded-full blur-3xl" />
+      
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        <div className="flex justify-center mb-8">
+          <img 
+            src="https://github.com/user-attachments/assets/54f1f596-4c9e-4e85-b24b-569330969a37" 
+            alt="ColabSocial Logo" 
+            className="h-32 w-32 md:h-40 md:w-40 drop-shadow-2xl"
+          />
+        </div>
+        
+        <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 text-balance leading-tight">
+          ColabSocial: transforme{" "}
+          <span className="text-primary">colaboração</span> em{" "}
+          <span className="text-secondary">participação</span>.
+        </h1>
+        
+        <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto mb-10 text-pretty leading-relaxed">
+          A ColabSocial conecta ideias, talentos e oportunidades para transformar colaboração em MVPs, 
+          produtos e novas startups, usando o ColabScore: um sistema transparente de pontuação e 
+          recompensa por contribuição.
+        </p>
+        
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 text-lg" asChild>
+            <a href="#cadastrar-ideia">
+              <Lightbulb className="mr-2 h-5 w-5" />
+              Quero cadastrar uma ideia
+            </a>
+          </Button>
+          <Button size="lg" variant="outline" className="border-secondary text-secondary hover:bg-secondary/10 px-8 py-6 text-lg" asChild>
+            <a href="#colaborar">
+              <Users className="mr-2 h-5 w-5" />
+              Quero colaborar com projetos
+            </a>
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function HowItWorksSection() {
+  return (
+    <section id="como-funciona" className="py-24 bg-card/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Como funciona</h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            Do nascimento da ideia até a criação de uma nova empresa, acompanhe cada etapa do processo
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6">
+          {processSteps.map((step, index) => (
+            <Card 
+              key={index} 
+              className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 group"
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <step.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-1 rounded-full">
+                        {index + 1}
+                      </span>
+                      <h3 className="font-semibold text-foreground">{step.title}</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{step.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function IdeaFormSection() {
+  const handleSubmit = () => {
+    alert("Funcionalidade em desenvolvimento no MVP")
+  }
+
+  return (
+    <section id="cadastrar-ideia" className="py-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Para quem tem uma ideia
+            </h2>
+            <p className="text-lg text-muted-foreground mb-6 text-pretty">
+              Tem uma ideia, mas ainda não tem equipe? Cadastre sua proposta e encontre colaboradores 
+              apaixonados por transformar inovação em realidade.
+            </p>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-accent" />
+                <span>Valide seu conceito</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-accent" />
+                <span>Encontre talentos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Rocket className="h-4 w-4 text-accent" />
+                <span>Lance seu MVP</span>
+              </div>
+            </div>
+          </div>
+          
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-xl text-foreground">Cadastre sua ideia</CardTitle>
+              <CardDescription>Preencha os dados abaixo para começar</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nome-ideia">Nome</Label>
+                  <Input id="nome-ideia" placeholder="Seu nome" className="bg-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email-ideia">E-mail</Label>
+                  <Input id="email-ideia" type="email" placeholder="seu@email.com" className="bg-input" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nome-projeto">Nome da ideia</Label>
+                <Input id="nome-projeto" placeholder="Nome do seu projeto" className="bg-input" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="problema">Qual problema resolve?</Label>
+                <Textarea id="problema" placeholder="Descreva o problema que sua ideia resolve..." className="bg-input min-h-[80px]" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="publico">Público-alvo</Label>
+                  <Input id="publico" placeholder="Ex: PMEs, estudantes..." className="bg-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estagio">Estágio</Label>
+                  <Select>
+                    <SelectTrigger className="bg-input">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ideia">Apenas ideia</SelectItem>
+                      <SelectItem value="validacao">Em validação</SelectItem>
+                      <SelectItem value="prototipo">Com protótipo</SelectItem>
+                      <SelectItem value="mvp">MVP pronto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ajuda">Que tipo de ajuda precisa?</Label>
+                <Textarea id="ajuda" placeholder="Desenvolvimento, design, marketing, vendas..." className="bg-input min-h-[60px]" />
+              </div>
+              <Button className="w-full bg-primary hover:bg-primary/90" onClick={handleSubmit}>
+                Cadastrar minha ideia
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CollaboratorFormSection() {
+  const handleSubmit = () => {
+    alert("Funcionalidade em desenvolvimento no MVP")
+  }
+
+  return (
+    <section id="colaborar" className="py-24 bg-card/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <Card className="bg-card border-border order-2 lg:order-1">
+            <CardHeader>
+              <CardTitle className="text-xl text-foreground">Quero colaborar</CardTitle>
+              <CardDescription>Cadastre-se para participar de projetos inovadores</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nome-colab">Nome</Label>
+                  <Input id="nome-colab" placeholder="Seu nome" className="bg-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email-colab">E-mail</Label>
+                  <Input id="email-colab" type="email" placeholder="seu@email.com" className="bg-input" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="area">Área de atuação</Label>
+                  <Select>
+                    <SelectTrigger className="bg-input">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="frontend">Front-end</SelectItem>
+                      <SelectItem value="backend">Back-end</SelectItem>
+                      <SelectItem value="fullstack">Full-stack</SelectItem>
+                      <SelectItem value="ux">UX/UI Design</SelectItem>
+                      <SelectItem value="pm">Product Management</SelectItem>
+                      <SelectItem value="marketing">Marketing</SelectItem>
+                      <SelectItem value="vendas">Vendas</SelectItem>
+                      <SelectItem value="outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nivel">Nível de experiência</Label>
+                  <Select>
+                    <SelectTrigger className="bg-input">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="junior">Júnior (0-2 anos)</SelectItem>
+                      <SelectItem value="pleno">Pleno (2-5 anos)</SelectItem>
+                      <SelectItem value="senior">Sênior (5+ anos)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="horas">Horas disponíveis/semana</Label>
+                  <Select>
+                    <SelectTrigger className="bg-input">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">Até 5 horas</SelectItem>
+                      <SelectItem value="10">5-10 horas</SelectItem>
+                      <SelectItem value="20">10-20 horas</SelectItem>
+                      <SelectItem value="40">20+ horas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tipo-projeto">Tipo de projeto</Label>
+                  <Select>
+                    <SelectTrigger className="bg-input">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="saas">SaaS</SelectItem>
+                      <SelectItem value="mobile">Mobile App</SelectItem>
+                      <SelectItem value="marketplace">Marketplace</SelectItem>
+                      <SelectItem value="fintech">Fintech</SelectItem>
+                      <SelectItem value="healthtech">Healthtech</SelectItem>
+                      <SelectItem value="edtech">Edtech</SelectItem>
+                      <SelectItem value="qualquer">Qualquer área</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contribuicao">Como pretende contribuir?</Label>
+                <Textarea id="contribuicao" placeholder="Descreva como você pode ajudar nos projetos..." className="bg-input min-h-[60px]" />
+              </div>
+              <Button className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground" onClick={handleSubmit}>
+                Quero colaborar
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <div className="order-1 lg:order-2">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Para quem quer colaborar
+            </h2>
+            <p className="text-lg text-muted-foreground mb-6 text-pretty">
+              Quer participar de startups mesmo sem investir dinheiro? Contribua com tempo e conhecimento 
+              e ganhe participação proporcional ao seu esforço através do ColabScore.
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                  <Award className="h-4 w-4 text-secondary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Ganhe participação real</h4>
+                  <p className="text-sm text-muted-foreground">Suas contribuições são convertidas em equity futuro</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="h-4 w-4 text-secondary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Desenvolva habilidades</h4>
+                  <p className="text-sm text-muted-foreground">Trabalhe em projetos reais com equipes diversas</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="h-4 w-4 text-secondary" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Faça parte do sucesso</h4>
+                  <p className="text-sm text-muted-foreground">Acompanhe o crescimento das startups que ajudou a criar</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ColabScoreSection() {
+  return (
+    <section id="colabscore" className="py-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent text-sm font-medium mb-4">
+            <Award className="h-4 w-4" />
+            Sistema de Pontuação
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            ColabScore
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
+            Uma camada inteligente sobre ferramentas que você já usa: GitHub, GitLab, Trello, Jira, Notion. 
+            Cada contribuição é registrada, validada e convertida em pontos de participação.
+          </p>
+        </div>
+
+        {/* Integration icons */}
+        <div className="flex flex-wrap justify-center gap-4 mb-12">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+            <Github className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">GitHub</span>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+            <Trello className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Trello</span>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Notion</span>
+          </div>
+        </div>
+
+        {/* Formula */}
+        <Card className="bg-card border-border mb-12 max-w-4xl mx-auto">
+          <CardContent className="p-8">
+            <h3 className="text-lg font-semibold text-foreground mb-4 text-center">Fórmula do ColabScore</h3>
+            <div className="bg-muted/50 rounded-xl p-6 text-center overflow-x-auto">
+              <code className="text-sm md:text-base text-foreground font-mono whitespace-nowrap">
+                <span className="text-primary font-bold">Pontos</span> = Horas validadas × Valor-hora × <span className="text-secondary">Fator de entrega</span> × <span className="text-accent">Fator de impacto</span> × Fator de risco
+              </code>
+            </div>
+            <p className="text-sm text-muted-foreground text-center mt-4">
+              Cada variável é calculada automaticamente com base nas evidências registradas nas ferramentas integradas.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Demo table */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-xl text-foreground">Tabela demonstrativa</CardTitle>
+            <CardDescription>Exemplo de pontuação por colaborador em diferentes projetos</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Projeto</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Colaborador</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Função</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Pontos</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Participação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {colabScoreData.map((row, index) => (
+                    <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-foreground">{row.projeto}</span>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground">{row.colaborador}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                          {row.funcao}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <span className="font-semibold text-accent">{row.pontos}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right text-muted-foreground">{row.participacao}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-muted-foreground mt-4 text-center">
+              Cada projeto tem seu próprio banco de pontos. Acúmulo transparente por contribuição.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
+
+function DashboardSection() {
+  return (
+    <section id="dashboard" className="py-24 bg-card/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Dashboard demonstrativo
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            Cada contribuição fica ligada a um projeto, tarefa e evidência. Justo, transparente e motivador.
+          </p>
+        </div>
+
+        <div className="grid gap-8">
+          {/* Projects overview */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Visão Geral de Projetos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Projeto</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Estágio</th>
+                      <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Colaboradores</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Pontos</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Valor Estimado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashboardProjects.map((row, index) => (
+                      <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-4 font-medium text-foreground">{row.projeto}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            row.estagio === 'MVP' ? 'bg-secondary/20 text-secondary' :
+                            row.estagio === 'Validação' ? 'bg-accent/20 text-accent' :
+                            'bg-primary/20 text-primary'
+                          }`}>
+                            {row.estagio}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center text-muted-foreground">{row.colaboradores}</td>
+                        <td className="py-3 px-4 text-right font-semibold text-accent">{row.pontos.toLocaleString()}</td>
+                        <td className="py-3 px-4 text-right text-foreground">{row.valor}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* EducaSaaS team detail */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">EducaSaaS - Equipe</CardTitle>
+                <CardDescription>Visão detalhada de participação</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Nome</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Função</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Entregas</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Pontos</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {educaSaasTeam.map((member, index) => (
+                        <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <td className="py-2 px-3 text-sm text-foreground">{member.nome}</td>
+                          <td className="py-2 px-3">
+                            <span className="text-xs text-muted-foreground">{member.funcao}</span>
+                          </td>
+                          <td className="py-2 px-3 text-center text-sm text-muted-foreground">{member.entregas}</td>
+                          <td className="py-2 px-3 text-right text-sm font-semibold text-accent">{member.pontos}</td>
+                          <td className="py-2 px-3 text-right text-sm text-muted-foreground">{member.participacao}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Available tasks */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">Próximas Tarefas Disponíveis</CardTitle>
+                <CardDescription>Oportunidades de contribuição</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Tarefa</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Perfil</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Pontos Est.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {availableTasks.map((task, index) => (
+                        <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <td className="py-3 px-3 text-sm text-foreground">{task.tarefa}</td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium">
+                              {task.perfil}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="font-semibold text-accent">{task.pontos}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ToolkitSection() {
+  const handleClick = () => {
+    alert("Funcionalidade em desenvolvimento no MVP")
+  }
+
+  return (
+    <section id="toolkit" className="py-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Guia Integrado de Inovação
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
+            A ColabSocial guia cada projeto por etapas práticas de inovação com templates e scorecards. 
+            Do problema à recompensa, cada passo é estruturado e mensurável.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {toolkitSteps.map((step, index) => (
+            <Card 
+              key={index} 
+              className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 group"
+            >
+              <CardContent className="p-6 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <step.icon className="h-7 w-7 text-primary" />
+                </div>
+                <div className="text-xs font-bold text-accent mb-2">Etapa {index + 1}</div>
+                <h3 className="font-semibold text-foreground mb-4">{step.title}</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full border-border hover:bg-primary/10 hover:border-primary"
+                  onClick={handleClick}
+                >
+                  {step.action}
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CTASection() {
+  return (
+    <section className="py-24 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-secondary/10 to-accent/10" />
+      <div className="absolute top-0 left-1/4 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/15 rounded-full blur-3xl" />
+      
+      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6 text-balance">
+          Faça parte de um novo modelo de empreendedorismo colaborativo
+        </h2>
+        <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
+          Conecte-se com pessoas que compartilham sua visão. Transforme ideias em realidade com o 
+          poder da colaboração.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 text-lg" asChild>
+            <a href="#cadastrar-ideia">
+              <Lightbulb className="mr-2 h-5 w-5" />
+              Cadastrar uma ideia
+            </a>
+          </Button>
+          <Button size="lg" variant="outline" className="border-secondary text-secondary hover:bg-secondary/10 px-8 py-6 text-lg" asChild>
+            <a href="#colaborar">
+              <Users className="mr-2 h-5 w-5" />
+              Quero colaborar
+            </a>
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function Footer() {
+  return (
+    <footer className="py-12 border-t border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <img 
+              src="https://github.com/user-attachments/assets/60d250d7-68db-4a00-80d4-0dc1d6ef78e4" 
+              alt="ColabSocial Logo" 
+              className="h-8 w-8"
+            />
+            <span className="font-bold text-foreground">ColabSocial</span>
+          </div>
+          
+          <div className="text-center md:text-right space-y-1">
+            <p className="text-muted-foreground text-sm">
+              Out_off_D_Box: conectando ideias, pessoas, produtos e inovação.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Out_off_D_Box: evoluindo ideias, evoluindo pessoas, evoluindo o mundo.
+            </p>
+          </div>
+        </div>
+        
+        <div className="mt-8 pt-8 border-t border-border/50 text-center">
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} ColabSocial. Todos os direitos reservados.
+          </p>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+export default function ColabSocialPage() {
+  return (
+    <main className="min-h-screen">
+      <Navbar />
+      <HeroSection />
+      <HowItWorksSection />
+      <IdeaFormSection />
+      <CollaboratorFormSection />
+      <ColabScoreSection />
+      <DashboardSection />
+      <ToolkitSection />
+      <CTASection />
+      <Footer />
+    </main>
+  )
+}
