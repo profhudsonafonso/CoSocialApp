@@ -37,7 +37,31 @@ import {
   SelectValue 
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
+
+interface Idea {
+  id: string
+  nome: string
+  email: string
+  nome_projeto: string
+  problema: string
+  publico?: string
+  estagio?: string
+  ajuda?: string
+  created_at?: string
+}
+
+interface Collaborator {
+  id: string
+  nome: string
+  email: string
+  area: string
+  nivel: string
+  horas?: string
+  tipo_projeto?: string
+  contribuicao?: string
+  created_at?: string
+}
 
 const navLinks = [
   { href: "#como-funciona", label: "Como Funciona" },
@@ -261,8 +285,54 @@ function HowItWorksSection() {
 }
 
 function IdeaFormSection() {
-  const handleSubmit = () => {
-    alert("Funcionalidade em desenvolvimento no MVP")
+  const [nomeIdeia, setNomeIdeia] = useState('')
+  const [emailIdeia, setEmailIdeia] = useState('')
+  const [nomeProjeto, setNomeProjeto] = useState('')
+  const [problema, setProblema] = useState('')
+  const [publico, setPublico] = useState('')
+  const [estagio, setEstagio] = useState('')
+  const [ajuda, setAjuda] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    setIsSubmitting(true)
+
+    try {
+      const response = await fetch('/api/ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: nomeIdeia,
+          email: emailIdeia,
+          nomeProjeto,
+          problema,
+          publico,
+          estagio,
+          ajuda,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Erro ao enviar a ideia. Tente novamente.')
+      }
+
+      alert('Ideia enviada com sucesso! Obrigado pelo seu cadastro.')
+      setNomeIdeia('')
+      setEmailIdeia('')
+      setNomeProjeto('')
+      setProblema('')
+      setPublico('')
+      setEstagio('')
+      setAjuda('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erro desconhecido ao enviar a ideia.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -299,52 +369,99 @@ function IdeaFormSection() {
               <CardDescription>Preencha os dados abaixo para começar</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nome-ideia">Nome</Label>
-                  <Input id="nome-ideia" placeholder="Seu nome" className="bg-input" />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nome-ideia">Nome</Label>
+                    <Input
+                      id="nome-ideia"
+                      value={nomeIdeia}
+                      onChange={(event) => setNomeIdeia(event.target.value)}
+                      placeholder="Seu nome"
+                      className="bg-input"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-ideia">E-mail</Label>
+                    <Input
+                      id="email-ideia"
+                      type="email"
+                      value={emailIdeia}
+                      onChange={(event) => setEmailIdeia(event.target.value)}
+                      placeholder="seu@email.com"
+                      className="bg-input"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email-ideia">E-mail</Label>
-                  <Input id="email-ideia" type="email" placeholder="seu@email.com" className="bg-input" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="nome-projeto">Nome da ideia</Label>
-                <Input id="nome-projeto" placeholder="Nome do seu projeto" className="bg-input" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="problema">Qual problema resolve?</Label>
-                <Textarea id="problema" placeholder="Descreva o problema que sua ideia resolve..." className="bg-input min-h-[80px]" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="publico">Público-alvo</Label>
-                  <Input id="publico" placeholder="Ex: PMEs, estudantes..." className="bg-input" />
+                  <Label htmlFor="nome-projeto">Nome da ideia</Label>
+                  <Input
+                    id="nome-projeto"
+                    value={nomeProjeto}
+                    onChange={(event) => setNomeProjeto(event.target.value)}
+                    placeholder="Nome do seu projeto"
+                    className="bg-input"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="estagio">Estágio</Label>
-                  <Select>
-                    <SelectTrigger className="bg-input">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ideia">Apenas ideia</SelectItem>
-                      <SelectItem value="validacao">Em validação</SelectItem>
-                      <SelectItem value="prototipo">Com protótipo</SelectItem>
-                      <SelectItem value="mvp">MVP pronto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="problema">Qual problema resolve?</Label>
+                  <Textarea
+                    id="problema"
+                    value={problema}
+                    onChange={(event) => setProblema(event.target.value)}
+                    placeholder="Descreva o problema que sua ideia resolve..."
+                    className="bg-input min-h-[80px]"
+                    required
+                  />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ajuda">Que tipo de ajuda precisa?</Label>
-                <Textarea id="ajuda" placeholder="Desenvolvimento, design, marketing, vendas..." className="bg-input min-h-[60px]" />
-              </div>
-              <Button className="w-full bg-primary hover:bg-primary/90" onClick={handleSubmit}>
-                Cadastrar minha ideia
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="publico">Público-alvo</Label>
+                    <Input
+                      id="publico"
+                      value={publico}
+                      onChange={(event) => setPublico(event.target.value)}
+                      placeholder="Ex: PMEs, estudantes..."
+                      className="bg-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estagio">Estágio</Label>
+                    <Select value={estagio} onValueChange={setEstagio} name="estagio">
+                      <SelectTrigger className="bg-input">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="idea">Apenas ideia</SelectItem>
+                        <SelectItem value="validation">Em validação</SelectItem>
+                        <SelectItem value="prototype">Com protótipo</SelectItem>
+                        <SelectItem value="mvp">MVP pronto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ajuda">Que tipo de ajuda precisa?</Label>
+                  <Textarea
+                    id="ajuda"
+                    value={ajuda}
+                    onChange={(event) => setAjuda(event.target.value)}
+                    placeholder="Desenvolvimento, design, marketing, vendas..."
+                    className="bg-input min-h-[60px]"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Enviando...' : 'Cadastrar minha ideia'}
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -354,8 +471,54 @@ function IdeaFormSection() {
 }
 
 function CollaboratorFormSection() {
-  const handleSubmit = () => {
-    alert("Funcionalidade em desenvolvimento no MVP")
+  const [nomeColab, setNomeColab] = useState('')
+  const [emailColab, setEmailColab] = useState('')
+  const [area, setArea] = useState('')
+  const [nivel, setNivel] = useState('')
+  const [horas, setHoras] = useState('')
+  const [tipoProjeto, setTipoProjeto] = useState('')
+  const [contribuicao, setContribuicao] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    setIsSubmitting(true)
+
+    try {
+      const response = await fetch('/api/collaborators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: nomeColab,
+          email: emailColab,
+          area,
+          nivel,
+          horas,
+          tipoProjeto,
+          contribuicao,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Erro ao enviar seus dados. Tente novamente.')
+      }
+
+      alert('Cadastro de colaborador enviado com sucesso! Obrigado pela sua participação.')
+      setNomeColab('')
+      setEmailColab('')
+      setArea('')
+      setNivel('')
+      setHoras('')
+      setTipoProjeto('')
+      setContribuicao('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erro desconhecido ao enviar seu cadastro.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -368,90 +531,117 @@ function CollaboratorFormSection() {
               <CardDescription>Cadastre-se para participar de projetos inovadores</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nome-colab">Nome</Label>
-                  <Input id="nome-colab" placeholder="Seu nome" className="bg-input" />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nome-colab">Nome</Label>
+                    <Input
+                      id="nome-colab"
+                      value={nomeColab}
+                      onChange={(event) => setNomeColab(event.target.value)}
+                      placeholder="Seu nome"
+                      className="bg-input"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-colab">E-mail</Label>
+                    <Input
+                      id="email-colab"
+                      type="email"
+                      value={emailColab}
+                      onChange={(event) => setEmailColab(event.target.value)}
+                      placeholder="seu@email.com"
+                      className="bg-input"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="area">Área de atuação</Label>
+                    <Select value={area} onValueChange={setArea} name="area">
+                      <SelectTrigger className="bg-input">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="frontend">Front-end</SelectItem>
+                        <SelectItem value="backend">Back-end</SelectItem>
+                        <SelectItem value="fullstack">Full-stack</SelectItem>
+                        <SelectItem value="ux">UX/UI Design</SelectItem>
+                        <SelectItem value="pm">Product Management</SelectItem>
+                        <SelectItem value="marketing">Marketing</SelectItem>
+                        <SelectItem value="vendas">Vendas</SelectItem>
+                        <SelectItem value="outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nivel">Nível de experiência</Label>
+                    <Select value={nivel} onValueChange={setNivel} name="nivel">
+                      <SelectTrigger className="bg-input">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="junior">Júnior (0-2 anos)</SelectItem>
+                        <SelectItem value="pleno">Pleno (2-5 anos)</SelectItem>
+                        <SelectItem value="senior">Sênior (5+ anos)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="horas">Horas disponíveis/semana</Label>
+                    <Select value={horas} onValueChange={setHoras} name="horas">
+                      <SelectTrigger className="bg-input">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">Até 5 horas</SelectItem>
+                        <SelectItem value="10">5-10 horas</SelectItem>
+                        <SelectItem value="20">10-20 horas</SelectItem>
+                        <SelectItem value="40">20+ horas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tipo-projeto">Tipo de projeto</Label>
+                    <Select value={tipoProjeto} onValueChange={setTipoProjeto} name="tipoProjeto">
+                      <SelectTrigger className="bg-input">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="saas">SaaS</SelectItem>
+                        <SelectItem value="mobile">Mobile App</SelectItem>
+                        <SelectItem value="marketplace">Marketplace</SelectItem>
+                        <SelectItem value="fintech">Fintech</SelectItem>
+                        <SelectItem value="healthtech">Healthtech</SelectItem>
+                        <SelectItem value="edtech">Edtech</SelectItem>
+                        <SelectItem value="qualquer">Qualquer área</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email-colab">E-mail</Label>
-                  <Input id="email-colab" type="email" placeholder="seu@email.com" className="bg-input" />
+                  <Label htmlFor="contribuicao">Como pretende contribuir?</Label>
+                  <Textarea
+                    id="contribuicao"
+                    value={contribuicao}
+                    onChange={(event) => setContribuicao(event.target.value)}
+                    placeholder="Descreva como você pode ajudar nos projetos..."
+                    className="bg-input min-h-[60px]"
+                  />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="area">Área de atuação</Label>
-                  <Select>
-                    <SelectTrigger className="bg-input">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="frontend">Front-end</SelectItem>
-                      <SelectItem value="backend">Back-end</SelectItem>
-                      <SelectItem value="fullstack">Full-stack</SelectItem>
-                      <SelectItem value="ux">UX/UI Design</SelectItem>
-                      <SelectItem value="pm">Product Management</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="vendas">Vendas</SelectItem>
-                      <SelectItem value="outros">Outros</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nivel">Nível de experiência</Label>
-                  <Select>
-                    <SelectTrigger className="bg-input">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="junior">Júnior (0-2 anos)</SelectItem>
-                      <SelectItem value="pleno">Pleno (2-5 anos)</SelectItem>
-                      <SelectItem value="senior">Sênior (5+ anos)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="horas">Horas disponíveis/semana</Label>
-                  <Select>
-                    <SelectTrigger className="bg-input">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">Até 5 horas</SelectItem>
-                      <SelectItem value="10">5-10 horas</SelectItem>
-                      <SelectItem value="20">10-20 horas</SelectItem>
-                      <SelectItem value="40">20+ horas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tipo-projeto">Tipo de projeto</Label>
-                  <Select>
-                    <SelectTrigger className="bg-input">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="saas">SaaS</SelectItem>
-                      <SelectItem value="mobile">Mobile App</SelectItem>
-                      <SelectItem value="marketplace">Marketplace</SelectItem>
-                      <SelectItem value="fintech">Fintech</SelectItem>
-                      <SelectItem value="healthtech">Healthtech</SelectItem>
-                      <SelectItem value="edtech">Edtech</SelectItem>
-                      <SelectItem value="qualquer">Qualquer área</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contribuicao">Como pretende contribuir?</Label>
-                <Textarea id="contribuicao" placeholder="Descreva como você pode ajudar nos projetos..." className="bg-input min-h-[60px]" />
-              </div>
-              <Button className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground" onClick={handleSubmit}>
-                Quero colaborar
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
+                <Button
+                  type="submit"
+                  className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Enviando...' : 'Quero colaborar'}
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
             </CardContent>
           </Card>
           
@@ -494,6 +684,111 @@ function CollaboratorFormSection() {
             </div>
           </div>
         </div>
+      </div>
+    </section>
+  )
+}
+
+function DatabasePreviewSection() {
+  const [ideas, setIdeas] = useState<Idea[]>([])
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [ideasRes, collaboratorsRes] = await Promise.all([
+          fetch('/api/ideas'),
+          fetch('/api/collaborators'),
+        ])
+
+        if (!ideasRes.ok || !collaboratorsRes.ok) {
+          throw new Error('Falha ao buscar dados do banco.')
+        }
+
+        const ideasJson = await ideasRes.json()
+        const collaboratorsJson = await collaboratorsRes.json()
+
+        setIdeas(ideasJson.data ?? [])
+        setCollaborators(collaboratorsJson.data ?? [])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dados.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  return (
+    <section id="dados-do-banco" className="py-24 bg-background/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground">Dados reais do banco</h2>
+          <p className="text-muted-foreground text-lg max-w-3xl mx-auto">
+            Veja as ideias e colaboradores armazenados no Supabase em tempo real.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="text-center text-foreground">Carregando dados...</div>
+        ) : error ? (
+          <div className="text-center text-destructive">{error}</div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-2">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">Últimas ideias cadastradas</CardTitle>
+                <CardDescription>{ideas.length} registro(s) no banco</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {ideas.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma ideia cadastrada ainda.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {ideas.slice(0, 4).map((idea) => (
+                      <div key={idea.id} className="rounded-2xl border border-border p-4 bg-background">
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <span className="font-semibold text-foreground">{idea.nome_projeto}</span>
+                          <span className="text-xs text-muted-foreground">{idea.estagio ?? 'Não informado'}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">{idea.problema}</p>
+                        <p className="text-sm text-foreground"><strong>{idea.nome}</strong> · {idea.publico ?? 'Público não informado'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">Últimos colaboradores</CardTitle>
+                <CardDescription>{collaborators.length} registro(s) no banco</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {collaborators.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum colaborador cadastrado ainda.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {collaborators.slice(0, 4).map((collab) => (
+                      <div key={collab.id} className="rounded-2xl border border-border p-4 bg-background">
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <span className="font-semibold text-foreground">{collab.nome}</span>
+                          <span className="text-xs text-muted-foreground">{collab.nivel}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">Área: {collab.area}</p>
+                        <p className="text-sm text-foreground">Disponibilidade: {collab.horas ?? 'Não informada'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </section>
   )
@@ -855,6 +1150,7 @@ export default function ColabSocialPage() {
       <HowItWorksSection />
       <IdeaFormSection />
       <CollaboratorFormSection />
+      <DatabasePreviewSection />
       <ColabScoreSection />
       <DashboardSection />
       <ToolkitSection />
