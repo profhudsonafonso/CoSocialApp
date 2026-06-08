@@ -62,12 +62,18 @@ COSOCIAL:CS-ABC12345 fix issue #12
 
 The webhook only marks matching assignments and issues as `submitted`. Points are awarded later after owner review.
 
+## Dashboard real
+
+The home page dashboard reads real data from Supabase through `GET /api/dashboard`.
+It uses accepted assignments and `public.colab_points` as the source of truth for awarded points. If an accepted assignment does not yet have a `colab_points` row, the dashboard falls back to `issue_assignments.accepted_points`.
+
 ## API Endpoints
 
 - `POST /api/ideas` — cadastra uma ideia
 - `GET /api/ideas` — lista ideias cadastradas
 - `POST /api/collaborators` — cadastra colaborador
 - `GET /api/collaborators` — lista colaboradores cadastrados
+- `GET /api/dashboard` — consolida métricas reais do dashboard
 - `POST /api/github/webhook` — captura commits de push do GitHub
 
 ## Learn More

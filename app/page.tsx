@@ -63,6 +63,58 @@ interface Collaborator {
   created_at?: string
 }
 
+interface DashboardOverview {
+  totalProjects: number
+  totalIssues: number
+  submittedTasks: number
+  reviewedTasks: number
+  acceptedTasks: number
+  rejectedTasks: number
+  totalPoints: number
+  activeCollaborators: number
+}
+
+interface DashboardProject {
+  ideaId: string
+  title: string
+  ownerEmail?: string | null
+  github_repo_url?: string | null
+  totalIssues: number
+  claimedTasks: number
+  submittedTasks: number
+  acceptedTasks: number
+  rejectedTasks: number
+  totalPoints: number
+  lastAcceptedAt?: string | null
+}
+
+interface DashboardAcceptedTask {
+  projectTitle: string
+  issueNumber: number | null
+  issueTitle: string
+  collaboratorName: string
+  collaboratorEmail: string
+  points: number
+  acceptedDate?: string | null
+  evidence_url?: string | null
+  githubIssueUrl?: string | null
+}
+
+interface DashboardTopCollaborator {
+  collaboratorId: string
+  name: string
+  email: string
+  totalPoints: number
+  acceptedTasks: number
+}
+
+interface DashboardData {
+  overview: DashboardOverview
+  projects: DashboardProject[]
+  recentAcceptedTasks: DashboardAcceptedTask[]
+  topCollaborators: DashboardTopCollaborator[]
+}
+
 const navLinks = [
   { href: "#como-funciona", label: "Como Funciona" },
   { href: "#colabscore", label: "ColabScore" },
@@ -86,28 +138,6 @@ const colabScoreData = [
   { projeto: "EducaSaaS", colaborador: "Ana Silva", funcao: "Front-end", pontos: 780, participacao: "12.5%" },
   { projeto: "FinControl", colaborador: "Carlos Santos", funcao: "Back-end", pontos: 650, participacao: "10.2%" },
   { projeto: "HealthTrack", colaborador: "Marina Costa", funcao: "UX Design", pontos: 420, participacao: "8.7%" },
-]
-
-const dashboardProjects = [
-  { projeto: "EducaSaaS", estagio: "MVP", colaboradores: 6, pontos: 4250, valor: "R$ 85.000" },
-  { projeto: "FinControl", estagio: "Validação", colaboradores: 4, pontos: 2800, valor: "R$ 56.000" },
-  { projeto: "HealthTrack", estagio: "Ideação", colaboradores: 3, pontos: 1200, valor: "R$ 24.000" },
-]
-
-const educaSaasTeam = [
-  { nome: "Ana Silva", funcao: "Front-end", entregas: 45, pontos: 780, participacao: "18.4%" },
-  { nome: "Bruno Lima", funcao: "Back-end", entregas: 38, pontos: 720, participacao: "16.9%" },
-  { nome: "Carla Mendes", funcao: "UX Design", entregas: 28, pontos: 580, participacao: "13.6%" },
-  { nome: "Diego Souza", funcao: "DevOps", entregas: 22, pontos: 450, participacao: "10.6%" },
-  { nome: "Elena Rocha", funcao: "QA", entregas: 35, pontos: 520, participacao: "12.2%" },
-  { nome: "Fernando Alves", funcao: "PM", entregas: 42, pontos: 680, participacao: "16.0%" },
-]
-
-const availableTasks = [
-  { tarefa: "Implementar autenticação OAuth", perfil: "Back-end", pontos: 45 },
-  { tarefa: "Design do dashboard mobile", perfil: "UX Design", pontos: 35 },
-  { tarefa: "Testes de integração API", perfil: "QA", pontos: 28 },
-  { tarefa: "Configurar CI/CD pipeline", perfil: "DevOps", pontos: 40 },
 ]
 
 const toolkitSteps = [
@@ -918,134 +948,224 @@ function ColabScoreSection() {
 }
 
 function DashboardSection() {
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const response = await fetch('/api/dashboard')
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(result?.error || 'Erro ao carregar dashboard.')
+        }
+
+        setDashboard(result)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dashboard.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [])
+
+  const formatDate = (value?: string | null) => {
+    if (!value) {
+      return 'Sem aceite'
+    }
+
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(new Date(value))
+  }
+
   return (
     <section id="dashboard" className="py-24 bg-card/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Dashboard demonstrativo
+            Dashboard
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Cada contribuição fica ligada a um projeto, tarefa e evidência. Justo, transparente e motivador.
           </p>
+          <p className="text-sm text-muted-foreground max-w-3xl mx-auto mt-3">
+            Dados calculados a partir de tarefas submetidas, revisadas e aceitas no fluxo GitHub.
+          </p>
         </div>
 
-        <div className="grid gap-8">
-          {/* Projects overview */}
+        {loading ? (
           <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">Visão Geral de Projetos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Projeto</th>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Estágio</th>
-                      <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Colaboradores</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Pontos</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Valor Estimado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dashboardProjects.map((row, index) => (
-                      <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-4 font-medium text-foreground">{row.projeto}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            row.estagio === 'MVP' ? 'bg-secondary/20 text-secondary' :
-                            row.estagio === 'Validação' ? 'bg-accent/20 text-accent' :
-                            'bg-primary/20 text-primary'
-                          }`}>
-                            {row.estagio}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center text-muted-foreground">{row.colaboradores}</td>
-                        <td className="py-3 px-4 text-right font-semibold text-accent">{row.pontos.toLocaleString()}</td>
-                        <td className="py-3 px-4 text-right text-foreground">{row.valor}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
+            <CardContent className="pt-6 text-center text-muted-foreground">Carregando dashboard...</CardContent>
           </Card>
+        ) : error ? (
+          <Card className="bg-card border-border">
+            <CardContent className="pt-6 text-center text-destructive">{error}</CardContent>
+          </Card>
+        ) : dashboard ? (
+          <div className="grid gap-8">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="bg-card border-border">
+                <CardContent className="p-5">
+                  <div className="text-sm text-muted-foreground">Projetos</div>
+                  <div className="text-3xl font-bold text-foreground mt-2">{dashboard.overview.totalProjects}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardContent className="p-5">
+                  <div className="text-sm text-muted-foreground">Issues</div>
+                  <div className="text-3xl font-bold text-foreground mt-2">{dashboard.overview.totalIssues}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardContent className="p-5">
+                  <div className="text-sm text-muted-foreground">Tarefas aceitas</div>
+                  <div className="text-3xl font-bold text-foreground mt-2">{dashboard.overview.acceptedTasks}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-card border-border">
+                <CardContent className="p-5">
+                  <div className="text-sm text-muted-foreground">Pontos</div>
+                  <div className="text-3xl font-bold text-accent mt-2">{dashboard.overview.totalPoints.toLocaleString('pt-BR')}</div>
+                </CardContent>
+              </Card>
+            </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* EducaSaaS team detail */}
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">EducaSaaS - Equipe</CardTitle>
-                <CardDescription>Visão detalhada de participação</CardDescription>
+                <CardTitle className="text-lg text-foreground">Visão Geral de Projetos</CardTitle>
+                <CardDescription>
+                  {dashboard.overview.submittedTasks} tarefa(s) submetida(s), {dashboard.overview.reviewedTasks} revisada(s), {dashboard.overview.activeCollaborators} colaborador(es) ativo(s)
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Nome</th>
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Função</th>
-                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Entregas</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Pontos</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {educaSaasTeam.map((member, index) => (
-                        <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                          <td className="py-2 px-3 text-sm text-foreground">{member.nome}</td>
-                          <td className="py-2 px-3">
-                            <span className="text-xs text-muted-foreground">{member.funcao}</span>
-                          </td>
-                          <td className="py-2 px-3 text-center text-sm text-muted-foreground">{member.entregas}</td>
-                          <td className="py-2 px-3 text-right text-sm font-semibold text-accent">{member.pontos}</td>
-                          <td className="py-2 px-3 text-right text-sm text-muted-foreground">{member.participacao}</td>
+                {dashboard.projects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum projeto cadastrado ainda.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">Projeto</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Issues</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Em andamento</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Submetidas</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Aceitas</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Rejeitadas</th>
+                          <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Pontos</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {dashboard.projects.map((project) => (
+                          <tr key={project.ideaId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-foreground">{project.title}</div>
+                              <div className="text-xs text-muted-foreground">{project.ownerEmail || 'Responsável não informado'}</div>
+                            </td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.totalIssues}</td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.claimedTasks}</td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.submittedTasks}</td>
+                            <td className="py-3 px-4 text-center text-secondary">{project.acceptedTasks}</td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.rejectedTasks}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-accent">{project.totalPoints.toLocaleString('pt-BR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Available tasks */}
+            <div className="grid lg:grid-cols-2 gap-8">
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="text-lg text-foreground">Próximas Tarefas Disponíveis</CardTitle>
-                <CardDescription>Oportunidades de contribuição</CardDescription>
+                <CardTitle className="text-lg text-foreground">Top colaboradores</CardTitle>
+                <CardDescription>Pontos vindos de tarefas aceitas</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Tarefa</th>
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Perfil</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Pontos Est.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {availableTasks.map((task, index) => (
-                        <tr key={index} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                          <td className="py-3 px-3 text-sm text-foreground">{task.tarefa}</td>
-                          <td className="py-3 px-3">
-                            <span className="px-2 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium">
-                              {task.perfil}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            <span className="font-semibold text-accent">{task.pontos}</span>
-                          </td>
+                {dashboard.topCollaborators.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum ponto aceito ainda.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Nome</th>
+                          <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Aceites</th>
+                          <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Pontos</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {dashboard.topCollaborators.map((collaborator) => (
+                          <tr key={collaborator.collaboratorId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="py-2 px-3">
+                              <div className="text-sm text-foreground">{collaborator.name}</div>
+                              <div className="text-xs text-muted-foreground">{collaborator.email}</div>
+                            </td>
+                            <td className="py-2 px-3 text-center text-sm text-muted-foreground">{collaborator.acceptedTasks}</td>
+                            <td className="py-2 px-3 text-right text-sm font-semibold text-accent">{collaborator.totalPoints.toLocaleString('pt-BR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">Tarefas aceitas recentes</CardTitle>
+                <CardDescription>Últimas contribuições revisadas e aceitas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dashboard.recentAcceptedTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma tarefa aceita ainda.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {dashboard.recentAcceptedTasks.map((task, index) => (
+                      <div key={`${task.projectTitle}-${task.issueNumber}-${index}`} className="rounded-xl border border-border bg-background p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="text-sm font-medium text-foreground">
+                              #{task.issueNumber} {task.issueTitle}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {task.projectTitle} · {task.collaboratorName || task.collaboratorEmail} · {formatDate(task.acceptedDate)}
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold text-accent whitespace-nowrap">{task.points.toLocaleString('pt-BR')} pts</div>
+                        </div>
+                        {(task.evidence_url || task.githubIssueUrl) && (
+                          <div className="flex flex-wrap gap-3 mt-3 text-xs">
+                            {task.evidence_url && (
+                              <a className="text-primary hover:underline" href={task.evidence_url} target="_blank" rel="noreferrer">
+                                Evidência
+                              </a>
+                            )}
+                            {task.githubIssueUrl && (
+                              <a className="text-primary hover:underline" href={task.githubIssueUrl} target="_blank" rel="noreferrer">
+                                Issue GitHub
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
-        </div>
+          </div>
+        ) : null}
       </div>
     </section>
   )
