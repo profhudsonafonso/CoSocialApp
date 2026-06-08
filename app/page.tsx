@@ -137,21 +137,27 @@ function Navbar() {
             <span className="font-bold text-lg text-foreground">ColabSocial</span>
           </a>
           
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => (
               <a 
                 key={link.href}
                 href={link.href} 
-                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium whitespace-nowrap"
               >
                 {link.label}
               </a>
             ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
               <a href="#cadastrar-ideia">Cadastrar Ideia</a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/contribuir/projetos">Projetos</a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/responsavel/revisar">Revisar</a>
             </Button>
             <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
               <a href="#colaborar">Colaborar</a>
@@ -182,6 +188,12 @@ function Navbar() {
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
                 <Button variant="outline" size="sm" asChild>
                   <a href="#cadastrar-ideia">Cadastrar Ideia</a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/contribuir/projetos">Ver projetos</a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/responsavel/revisar">Revisar tarefas</a>
                 </Button>
                 <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
                   <a href="#colaborar">Colaborar</a>
@@ -292,6 +304,7 @@ function IdeaFormSection() {
   const [publico, setPublico] = useState('')
   const [estagio, setEstagio] = useState('')
   const [ajuda, setAjuda] = useState('')
+  const [githubRepoUrl, setGithubRepoUrl] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -311,6 +324,7 @@ function IdeaFormSection() {
           publico,
           estagio,
           ajuda,
+          githubRepoUrl,
         }),
       })
 
@@ -328,6 +342,7 @@ function IdeaFormSection() {
       setPublico('')
       setEstagio('')
       setAjuda('')
+      setGithubRepoUrl('')
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Erro desconhecido ao enviar a ideia.')
     } finally {
@@ -451,6 +466,16 @@ function IdeaFormSection() {
                     onChange={(event) => setAjuda(event.target.value)}
                     placeholder="Desenvolvimento, design, marketing, vendas..."
                     className="bg-input min-h-[60px]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="github-repo-url">Repositório GitHub do projeto</Label>
+                  <Input
+                    id="github-repo-url"
+                    value={githubRepoUrl}
+                    onChange={(event) => setGithubRepoUrl(event.target.value)}
+                    placeholder="https://github.com/owner/repo"
+                    className="bg-input"
                   />
                 </div>
                 <Button

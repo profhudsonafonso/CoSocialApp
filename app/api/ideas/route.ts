@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { parseGitHubRepoUrl } from '@/lib/github'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: Request) {
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
     publico,
     estagio,
     ajuda,
+    githubRepoUrl,
   } = body
 
   if (!nome || !email || !nomeProjeto || !problema) {
@@ -20,18 +22,36 @@ export async function POST(request: Request) {
     )
   }
 
-  const { data, error } = await supabaseAdmin.from('ideas').insert([
-    {
-      nome,
-      email,
-      nome_projeto: nomeProjeto,
-      problema,
-      publico,
-      estagio,
-      ajuda,
-      created_at: new Date().toISOString(),
-    },
-  ])
+  const normalizedGitHubRepoUrl = typeof githubRepoUrl === 'string' ? githubRepoUrl.trim() : ''
+  const parsedGitHubRepo = normalizedGitHubRepoUrl ? parseGitHubRepoUrl(normalizedGitHubRepoUrl) : null
+
+  if (normalizedGitHubRepoUrl && !parsedGitHubRepo) {
+    return NextResponse.json(
+      { error: 'URL do repositório GitHub inválida. Use o formato https://github.com/owner/repo.' },
+      { status: 400 },
+    )
+  }
+
+  const ideaPayload = {
+    nome,
+    email,
+    nome_projeto: nomeProjeto,
+    problema,
+    publico,
+    estagio,
+    ajuda,
+    created_at: new Date().toISOString(),
+    ...(parsedGitHubRepo
+      ? {
+          github_repo_url: normalizedGitHubRepoUrl,
+          github_owner: parsedGitHubRepo.owner,
+          github_repo: parsedGitHubRepo.repo,
+          github_default_branch: 'main',
+        }
+      : {}),
+  }
+
+  const { data, error } = await supabaseAdmin.from('ideas').insert([ideaPayload])
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
