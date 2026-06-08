@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { ExternalLink, GitBranch, RefreshCw } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -181,16 +182,19 @@ export default function ContribuirProjetosPage() {
   return (
     <main className="min-h-screen bg-background py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-3">
-          <Badge variant="outline" className="w-fit">
-            ColabSocial
-          </Badge>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground md:text-4xl">Projetos para contribuir</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
-              Escolha um projeto conectado ao GitHub, sincronize as issues abertas e pegue uma tarefa.
-            </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-3">
+            <Badge variant="outline" className="w-fit">
+              ColabSocial
+            </Badge>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground md:text-4xl">Projetos para contribuir</h1>
+              <p className="mt-2 max-w-2xl text-muted-foreground">
+                Escolha um projeto conectado ao GitHub, sincronize as issues abertas e pegue uma tarefa.
+              </p>
+            </div>
           </div>
+          <ThemeToggle />
         </div>
 
         <Card className="bg-card border-border">

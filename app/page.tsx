@@ -25,6 +25,8 @@ import {
   Menu,
   X
 } from "lucide-react"
+import { BrandLogo } from "@/components/BrandLogo"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -159,12 +161,7 @@ function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <a href="#" className="flex items-center gap-2">
-            <img 
-              src="https://github.com/user-attachments/assets/60d250d7-68db-4a00-80d4-0dc1d6ef78e4" 
-              alt="ColabSocial Logo" 
-              className="h-8 w-8"
-            />
-            <span className="font-bold text-lg text-foreground">ColabSocial</span>
+            <BrandLogo imageClassName="h-9 w-9" />
           </a>
           
           <div className="hidden lg:flex items-center gap-6">
@@ -192,14 +189,18 @@ function Navbar() {
             <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
               <a href="#colaborar">Colaborar</a>
             </Button>
+            <ThemeToggle />
           </div>
 
-          <button 
-            className="md:hidden p-2 text-foreground"
-            onClick={() => setIsOpen(!isOpen)}
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle />
+            <button 
+              className="p-2 text-foreground"
+              onClick={() => setIsOpen(!isOpen)}
+            >
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </div>
 
         {isOpen && (
@@ -247,10 +248,9 @@ function HeroSection() {
       
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <div className="flex justify-center mb-8">
-          <img 
-            src="https://github.com/user-attachments/assets/54f1f596-4c9e-4e85-b24b-569330969a37" 
-            alt="ColabSocial Logo" 
-            className="h-32 w-32 md:h-40 md:w-40 drop-shadow-2xl"
+          <BrandLogo
+            showText={false}
+            imageClassName="h-28 w-28 rounded-2xl md:h-36 md:w-36 drop-shadow-2xl"
           />
         </div>
         
@@ -1259,12 +1259,7 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <img 
-              src="https://github.com/user-attachments/assets/60d250d7-68db-4a00-80d4-0dc1d6ef78e4" 
-              alt="ColabSocial Logo" 
-              className="h-8 w-8"
-            />
-            <span className="font-bold text-foreground">ColabSocial</span>
+            <BrandLogo imageClassName="h-8 w-8" />
           </div>
           
           <div className="text-center md:text-right space-y-1">

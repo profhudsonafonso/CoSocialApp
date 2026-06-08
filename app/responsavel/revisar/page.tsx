@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { ExternalLink, Search } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -152,16 +153,19 @@ export default function ResponsavelRevisarPage() {
   return (
     <main className="min-h-screen bg-background py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-3">
-          <Badge variant="outline" className="w-fit">
-            Responsável
-          </Badge>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground md:text-4xl">Revisar contribuições</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">
-              Avalie submissions enviadas por colaboradores e atribua pontos após revisar o Pull Request.
-            </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-3">
+            <Badge variant="outline" className="w-fit">
+              Responsável
+            </Badge>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground md:text-4xl">Revisar contribuições</h1>
+              <p className="mt-2 max-w-2xl text-muted-foreground">
+                Avalie submissions enviadas por colaboradores e atribua pontos após revisar o Pull Request.
+              </p>
+            </div>
           </div>
+          <ThemeToggle />
         </div>
 
         <Card className="border-border bg-card">
