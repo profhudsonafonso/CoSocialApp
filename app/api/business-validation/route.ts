@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server'
-import { generateBusinessValidation } from '@/lib/business-validation'
+import { generateBusinessValidationMarkdown } from '@/lib/business-validation/report'
+import { runBusinessValidationSearches } from '@/lib/business-validation/search-connectors'
+import {
+  calculateDifferentiationScore,
+  calculateNoveltyScore,
+  calculateRiskScore,
+  getOverallRecommendation,
+} from '@/lib/business-validation/scoring'
 import { supabaseAdmin } from '@/lib/supabase'
 
 interface ValidationRunRecord {
@@ -27,6 +34,20 @@ interface ValidationChildRecord {
   validation_run_id: string
 }
 
+interface ConnectorStatusRecord extends ValidationChildRecord {
+  source_type: string
+  attempted: boolean | null
+  success: boolean | null
+  result_count: number | null
+  error_message: string | null
+}
+
+interface IdeaRecord {
+  id: string
+  nome_projeto: string | null
+  github_repo_url: string | null
+}
+
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -49,7 +70,7 @@ async function loadValidationHistory(ideaId: string) {
     return []
   }
 
-  const [queriesResult, candidatesResult, reportsResult] = await Promise.all([
+  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult] = await Promise.all([
     supabaseAdmin
       .from('business_validation_queries')
       .select('*')
@@ -65,9 +86,14 @@ async function loadValidationHistory(ideaId: string) {
       .select('*')
       .in('validation_run_id', runIds)
       .returns<ValidationChildRecord[]>(),
+    supabaseAdmin
+      .from('business_validation_connector_status')
+      .select('*')
+      .in('validation_run_id', runIds)
+      .returns<ConnectorStatusRecord[]>(),
   ])
 
-  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error].find(Boolean)
+  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error, connectorStatusResult.error].find(Boolean)
 
   if (firstError) {
     throw new Error(firstError.message)
@@ -88,12 +114,14 @@ async function loadValidationHistory(ideaId: string) {
   const queriesByRunId = groupByRunId(queriesResult.data)
   const candidatesByRunId = groupByRunId(candidatesResult.data)
   const reportsByRunId = groupByRunId(reportsResult.data)
+  const connectorStatusesByRunId = groupByRunId(connectorStatusResult.data)
 
   return (runs || []).map((run) => ({
     ...run,
     queries: queriesByRunId.get(run.id) || [],
     candidates: candidatesByRunId.get(run.id) || [],
     reports: reportsByRunId.get(run.id) || [],
+    sourceStatuses: connectorStatusesByRunId.get(run.id) || [],
   }))
 }
 
@@ -143,14 +171,40 @@ export async function POST(request: Request) {
     )
   }
 
-  const generated = generateBusinessValidation(input)
+  const { data: idea, error: ideaError } = await supabaseAdmin
+    .from('ideas')
+    .select('id, nome_projeto, github_repo_url')
+    .eq('id', ideaId)
+    .single<IdeaRecord>()
+
+  if (ideaError || !idea) {
+    return NextResponse.json({ error: 'Ideia não encontrada.' }, { status: 404 })
+  }
+
+  const { data: previousRuns, error: previousRunsError } = await supabaseAdmin
+    .from('business_validation_runs')
+    .select('id')
+    .eq('idea_id', ideaId)
+    .returns<Array<{ id: string }>>()
+
+  if (previousRunsError) {
+    return NextResponse.json({ error: previousRunsError.message }, { status: 500 })
+  }
+
+  const searchInput = {
+    ...input,
+    ideaId,
+    ideaName: input.ideaName || idea.nome_projeto || '',
+    ownProjectUrls: [idea.github_repo_url].filter(Boolean) as string[],
+    ownValidationRunIds: (previousRuns || []).map((run) => run.id),
+  }
 
   const { data: run, error: runError } = await supabaseAdmin
     .from('business_validation_runs')
     .insert([
       {
         idea_id: ideaId,
-        status: 'completed',
+        status: 'running',
         idea_name: input.ideaName,
         short_description: input.shortDescription,
         problem: input.problem,
@@ -160,11 +214,6 @@ export async function POST(request: Request) {
         business_model: input.businessModel,
         market_region: input.marketRegion,
         known_competitors: input.knownCompetitors,
-        novelty_score: generated.noveltyScore,
-        risk_score: generated.riskScore,
-        differentiation_score: generated.differentiationScore,
-        overall_recommendation: generated.overallRecommendation,
-        completed_at: new Date().toISOString(),
       },
     ])
     .select('*')
@@ -174,43 +223,85 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: runError?.message || 'Erro ao salvar validação.' }, { status: 500 })
   }
 
-  const [queriesResult, candidatesResult, reportsResult] = await Promise.all([
+  const searchResult = await runBusinessValidationSearches(searchInput)
+  const noveltyScore = calculateNoveltyScore(searchResult.candidates)
+  const riskScore = calculateRiskScore(searchResult.candidates)
+  const differentiationScore = calculateDifferentiationScore(searchInput, searchResult.candidates)
+  const overallRecommendation = getOverallRecommendation(noveltyScore, riskScore, differentiationScore, searchResult.candidates)
+  const report = generateBusinessValidationMarkdown(
+    searchInput,
+    searchResult.queries,
+    searchResult.candidates,
+    { noveltyScore, riskScore, differentiationScore },
+    searchResult.connectorErrors,
+    searchResult.sourceStatuses,
+  )
+
+  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult] = await Promise.all([
     supabaseAdmin
       .from('business_validation_queries')
-      .insert(generated.queries.map((query) => ({ ...query, validation_run_id: run.id })))
+      .insert(searchResult.queries.map((query) => ({ ...query, validation_run_id: run.id })))
       .select('*'),
     supabaseAdmin
       .from('business_validation_candidates')
-      .insert(generated.candidates.map((candidate) => ({ ...candidate, validation_run_id: run.id })))
+      .insert(searchResult.candidates.map((candidate) => ({ ...candidate, validation_run_id: run.id })))
       .select('*'),
     supabaseAdmin
       .from('business_validation_reports')
       .insert([
         {
           validation_run_id: run.id,
-          markdown_report: generated.markdownReport,
-          executive_summary: generated.executiveSummary,
-          main_risks: generated.mainRisks,
-          main_opportunities: generated.mainOpportunities,
-          recommendation: generated.recommendation,
+          markdown_report: report.markdownReport,
+          executive_summary: report.executiveSummary,
+          main_risks: report.mainRisks,
+          main_opportunities: report.mainOpportunities,
+          recommendation: report.recommendation,
         },
       ])
       .select('*'),
+    supabaseAdmin
+      .from('business_validation_connector_status')
+      .insert(searchResult.sourceStatuses.map((status) => ({ ...status, validation_run_id: run.id })))
+      .select('*'),
   ])
 
-  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error].find(Boolean)
+  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error, connectorStatusResult.error].find(Boolean)
 
   if (firstError) {
     return NextResponse.json({ error: firstError.message }, { status: 500 })
   }
 
+  const { data: completedRun, error: updateError } = await supabaseAdmin
+    .from('business_validation_runs')
+    .update({
+      status: 'completed',
+      novelty_score: noveltyScore,
+      risk_score: riskScore,
+      differentiation_score: differentiationScore,
+      overall_recommendation: overallRecommendation,
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', run.id)
+    .select('*')
+    .single<ValidationRunRecord>()
+
+  if (updateError || !completedRun) {
+    return NextResponse.json({ error: updateError?.message || 'Erro ao finalizar validação.' }, { status: 500 })
+  }
+
   return NextResponse.json(
     {
-      run,
+      run: completedRun,
       queries: queriesResult.data || [],
       candidates: candidatesResult.data || [],
       reports: reportsResult.data || [],
-      note: 'Este MVP gerou uma análise inicial e queries sugeridas. A busca web automática será adicionada em uma próxima etapa.',
+      sourcesUsed: searchResult.sourcesUsed,
+      sourceStatuses: connectorStatusResult.data || [],
+      connectorErrors: searchResult.connectorErrors,
+      skippedQueries: searchResult.skippedQueries,
+      note: searchResult.usedFallback
+        ? 'Nenhuma evidência externa real foi coletada nesta rodada. Foram geradas apenas hipóteses locais para investigação manual.'
+        : 'Este MVP usa fontes públicas e uma heurística simples de similaridade. A análise deve ser revisada pela equipe antes de decisões estratégicas.',
     },
     { status: 201 },
   )

@@ -36,14 +36,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/allow_multiple_collaborators_per_issue.sql` to allow multiple collaborators per issue and add explicit issue finalization.
    - `supabase/colabscore_configuration.sql` to add project and issue-level ColabScore settings.
    - `supabase/business_validation_mvp.sql` to add the initial business validation MVP tables.
+   - `supabase/business_validation_sources_update.sql` to add source metadata for external validation evidence.
+   - `supabase/business_validation_connector_status.sql` to store connector execution status for each validation run.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
 ## GitHub Webhook
 
 Configure these environment variables for the GitHub contribution flow:
 
-- `GITHUB_TOKEN` — required to merge Pull Requests from the review screen and useful for higher GitHub API limits.
+- `GITHUB_TOKEN` — required to merge Pull Requests from the review screen, useful for higher GitHub API limits, and optional for Business Validation GitHub searches.
 - `GITHUB_WEBHOOK_SECRET` — required for signed GitHub webhook verification in production.
+- `BRAVE_SEARCH_API_KEY` — optional; enables broader web search in the Business Validation MVP.
 
 For each project repository, create a GitHub webhook pointing to:
 
@@ -80,7 +83,17 @@ It uses accepted assignments and `public.colab_points` as the source of truth fo
 
 `/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.
 
-This MVP does not yet execute real external web search. Future work can add Web Search API, GitHub Search API, Product Hunt, Google Patents, G2/Capterra, and app store search.
+This MVP uses public sources such as GitHub Search, Hacker News Algolia, Wikipedia/OpenSearch, OpenAlex, and optionally Brave Search. If external APIs fail, it falls back to local deterministic candidates and clearly marks them as fallback.
+
+Future work can add Product Hunt official GraphQL, Google Patents through an allowed source, app store search, source confidence calibration, and manual reviewer validation.
+
+## Queries, evidências externas e hipóteses locais
+
+Queries are short search terms used to consult external sources. They are not results by themselves.
+
+External evidence can come from GitHub, Hacker News, Wikipedia, OpenAlex, or Brave Search. Local fallback hypotheses are not external evidence and must be used only to guide manual investigation.
+
+Previous validation history is shown only as history, not as competitor evidence. The validation flow must not compare a project with itself or use previous runs from the same idea as market evidence.
 
 ## API Endpoints
 

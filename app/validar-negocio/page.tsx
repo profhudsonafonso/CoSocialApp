@@ -49,6 +49,7 @@ interface ValidationRun {
   queries?: ValidationQuery[]
   candidates?: ValidationCandidate[]
   reports?: ValidationReport[]
+  sourceStatuses?: SourceStatus[]
 }
 
 interface ValidationQuery {
@@ -66,6 +67,8 @@ interface ValidationCandidate {
   similarity_score: number | null
   risk_level: string | null
   evidence_summary: string | null
+  source_type?: string | null
+  source_confidence?: number | null
   website_url?: string | null
 }
 
@@ -81,6 +84,17 @@ interface ValidationResult {
   candidates: ValidationCandidate[]
   reports: ValidationReport[]
   note: string
+  sourcesUsed?: string[]
+  sourceStatuses?: SourceStatus[]
+  connectorErrors?: string[]
+}
+
+interface SourceStatus {
+  source_type: string
+  attempted: boolean
+  success: boolean
+  result_count: number
+  error_message: string | null
 }
 
 const defaultForm: ValidationForm = {
@@ -129,6 +143,57 @@ function renderMarkdown(markdown: string) {
 
     return <p key={index} className="text-sm leading-relaxed text-muted-foreground">{line}</p>
   })
+}
+
+function sourceLabel(sourceType: string | null | undefined) {
+  const labels: Record<string, string> = {
+    web: "Web",
+    github: "GitHub",
+    hacker_news: "Hacker News",
+    wikipedia: "Wikipedia",
+    openalex: "OpenAlex",
+    local_fallback: "Hipóteses locais para investigação",
+  }
+
+  return labels[sourceType || ""] || sourceType || "Sem fonte"
+}
+
+function sourceStatusLabel(status: SourceStatus) {
+  if (status.source_type === "local_fallback") {
+    return "Hipóteses locais geradas"
+  }
+
+  if (!status.attempted) {
+    return "Não configurada"
+  }
+
+  if (!status.success) {
+    return "Falhou"
+  }
+
+  if (status.result_count > 0) {
+    return "Consultada com resultados reais"
+  }
+
+  return "Consultada, mas sem resultados"
+}
+
+function formatScore(value: number | null | undefined) {
+  return value === null || value === undefined ? "insuficiente" : value
+}
+
+function isExternalEvidence(candidate: ValidationCandidate) {
+  return ["github", "hacker_news", "wikipedia", "openalex", "web"].includes(candidate.source_type || "")
+}
+
+function groupCandidatesBySource(candidates: ValidationCandidate[]) {
+  return candidates.reduce<Record<string, ValidationCandidate[]>>((groups, candidate) => {
+    const sourceType = candidate.source_type || "unknown"
+    return {
+      ...groups,
+      [sourceType]: [...(groups[sourceType] || []), candidate],
+    }
+  }, {})
 }
 
 export default function ValidarNegocioPage() {
@@ -265,11 +330,17 @@ export default function ValidarNegocioPage() {
       queries: run.queries || [],
       candidates: run.candidates || [],
       reports: run.reports || [],
-      note: "Este MVP gerou uma análise inicial e queries sugeridas. A busca web automática será adicionada em uma próxima etapa.",
+      sourcesUsed: Array.from(new Set((run.candidates || []).map((candidate) => candidate.source_type || "unknown"))),
+      sourceStatuses: run.sourceStatuses || [],
+      note: "Este MVP usa fontes públicas e uma heurística simples de similaridade. A análise deve ser revisada pela equipe antes de decisões estratégicas.",
     })
   }
 
   const currentReport = result?.reports?.[0]?.markdown_report || ""
+  const groupedCandidates = result ? groupCandidatesBySource(result.candidates) : {}
+  const fallbackCandidates = groupedCandidates.local_fallback || []
+  const externalCandidateGroups = Object.entries(groupedCandidates).filter(([sourceType]) => sourceType !== "local_fallback")
+  const sourceStatuses = result?.sourceStatuses || []
 
   return (
     <main className="min-h-screen bg-background py-12">
@@ -345,7 +416,7 @@ export default function ValidarNegocioPage() {
             <CardHeader>
               <CardTitle className="text-xl text-foreground">Dados para validação</CardTitle>
               <CardDescription>
-                Este MVP gera análise local e queries sugeridas. Ele ainda não executa busca web automática.
+                Este MVP consulta fontes públicas quando disponíveis. Se nenhuma evidência externa for encontrada, ele gera apenas hipóteses locais para orientar investigação manual.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -394,6 +465,9 @@ export default function ValidarNegocioPage() {
               <Button type="button" onClick={generateValidation} disabled={generating} className="w-fit bg-primary hover:bg-primary/90">
                 {generating ? "Gerando..." : "Gerar validação MVP"}
               </Button>
+              {generating && (
+                <p className="text-sm text-muted-foreground">Buscando evidências reais em bases externas...</p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -405,31 +479,62 @@ export default function ValidarNegocioPage() {
                 <CardTitle className="text-xl text-foreground">Resultado</CardTitle>
                 <CardDescription>{result.note}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-4">
-                <div className="rounded-md border border-border bg-background p-4">
-                  <p className="text-xs text-muted-foreground">Score de novidade</p>
-                  <p className="mt-1 text-3xl font-semibold text-foreground">{result.run.novelty_score}</p>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="rounded-md border border-border bg-background p-4">
+                    <p className="text-xs text-muted-foreground">Score de novidade</p>
+                    <p className="mt-1 text-3xl font-semibold text-foreground">{formatScore(result.run.novelty_score)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-4">
+                    <p className="text-xs text-muted-foreground">Score de risco</p>
+                    <p className="mt-1 text-3xl font-semibold text-accent">{formatScore(result.run.risk_score)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-4">
+                    <p className="text-xs text-muted-foreground">Score de diferenciação</p>
+                    <p className="mt-1 text-3xl font-semibold text-secondary">{formatScore(result.run.differentiation_score)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-4">
+                    <p className="text-xs text-muted-foreground">Recomendação final</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{result.run.overall_recommendation}</p>
+                  </div>
                 </div>
                 <div className="rounded-md border border-border bg-background p-4">
-                  <p className="text-xs text-muted-foreground">Score de risco</p>
-                  <p className="mt-1 text-3xl font-semibold text-accent">{result.run.risk_score}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-4">
-                  <p className="text-xs text-muted-foreground">Score de diferenciação</p>
-                  <p className="mt-1 text-3xl font-semibold text-secondary">{result.run.differentiation_score}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-4">
-                  <p className="text-xs text-muted-foreground">Recomendação final</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">{result.run.overall_recommendation}</p>
+                  <p className="text-sm font-medium text-foreground">Status das fontes</p>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                    {sourceStatuses.map((status) => (
+                      <div key={status.source_type} className="rounded-md border border-border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-foreground">{sourceLabel(status.source_type)}</span>
+                          <Badge variant={status.success && status.result_count > 0 ? "secondary" : "outline"}>
+                            {sourceStatusLabel(status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {status.result_count} resultado(s){status.error_message ? ` · ${status.error_message}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Este MVP usa fontes públicas e uma heurística simples de similaridade. A análise deve ser revisada pela equipe antes de decisões estratégicas.
+                  </p>
+                  {result.connectorErrors && result.connectorErrors.length > 0 && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Algumas fontes não retornaram dados ou falharam temporariamente.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             <div className="grid gap-8 lg:grid-cols-2">
               <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-xl text-foreground">Queries sugeridas</CardTitle>
-                </CardHeader>
+              <CardHeader>
+                <CardTitle className="text-xl text-foreground">Queries sugeridas</CardTitle>
+                <CardDescription>
+                  Queries são termos curtos usados para buscar evidências nas fontes externas. Elas não são resultados; são apenas consultas executadas.
+                </CardDescription>
+              </CardHeader>
                 <CardContent className="space-y-3">
                   {result.queries.map((query, index) => (
                     <div key={`${query.query_text}-${index}`} className="rounded-md border border-border bg-background p-3">
@@ -454,7 +559,7 @@ export default function ValidarNegocioPage() {
                         <div>
                           <p className="text-sm font-medium text-foreground">{formatDate(run.created_at)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {run.overall_recommendation} · novidade {run.novelty_score} · risco {run.risk_score} · diferenciação {run.differentiation_score}
+                            {run.overall_recommendation} · novidade {formatScore(run.novelty_score)} · risco {formatScore(run.risk_score)} · diferenciação {formatScore(run.differentiation_score)}
                           </p>
                         </div>
                         <Button type="button" variant="outline" size="sm" onClick={() => showHistoryReport(run)}>
@@ -471,39 +576,85 @@ export default function ValidarNegocioPage() {
               <CardHeader>
                 <CardTitle className="text-xl text-foreground">Mapa inicial de soluções similares</CardTitle>
               </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-3 py-2 text-left text-sm text-muted-foreground">Solução/candidato</th>
-                      <th className="px-3 py-2 text-left text-sm text-muted-foreground">Tipo</th>
-                      <th className="px-3 py-2 text-center text-sm text-muted-foreground">Similaridade</th>
-                      <th className="px-3 py-2 text-center text-sm text-muted-foreground">Risco</th>
-                      <th className="px-3 py-2 text-left text-sm text-muted-foreground">Evidência/resumo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.candidates.map((candidate, index) => (
-                      <tr key={`${candidate.name}-${index}`} className="border-b border-border/50">
-                        <td className="px-3 py-3 text-sm text-foreground">
-                          {candidate.website_url ? (
-                            <a href={candidate.website_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                              {candidate.name}
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : candidate.name}
-                          <p className="mt-1 text-xs text-muted-foreground">{candidate.description}</p>
-                        </td>
-                        <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.candidate_type}</td>
-                        <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.similarity_score}</td>
-                        <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.risk_level}</td>
-                        <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.evidence_summary}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <CardContent className="space-y-6 overflow-x-auto">
+                {externalCandidateGroups.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma evidência externa real foi coletada nesta rodada.</p>
+                )}
+                {externalCandidateGroups.map(([sourceType, candidates]) => (
+                  <div key={sourceType} className="space-y-3">
+                    <h3 className="font-semibold text-foreground">{sourceLabel(sourceType)}</h3>
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="px-3 py-2 text-left text-sm text-muted-foreground">Solução/candidato</th>
+                          <th className="px-3 py-2 text-left text-sm text-muted-foreground">Tipo</th>
+                          <th className="px-3 py-2 text-center text-sm text-muted-foreground">Fonte</th>
+                          <th className="px-3 py-2 text-center text-sm text-muted-foreground">Similaridade</th>
+                          <th className="px-3 py-2 text-center text-sm text-muted-foreground">Risco</th>
+                          <th className="px-3 py-2 text-left text-sm text-muted-foreground">Evidência/resumo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {candidates.map((candidate, index) => (
+                          <tr key={`${candidate.name}-${sourceType}-${index}`} className="border-b border-border/50">
+                            <td className="px-3 py-3 text-sm text-foreground">
+                              {candidate.website_url ? (
+                                <a href={candidate.website_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                  {candidate.name}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : candidate.name}
+                              <p className="mt-1 text-xs text-muted-foreground">{candidate.description}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge variant={isExternalEvidence(candidate) ? "secondary" : "outline"}>
+                                  {isExternalEvidence(candidate) ? "Evidência externa" : "Não é evidência externa"}
+                                </Badge>
+                              </div>
+                              {!isExternalEvidence(candidate) && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  Este item é apenas uma hipótese para investigação.
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.candidate_type}</td>
+                            <td className="px-3 py-3 text-center text-sm text-muted-foreground">{sourceLabel(candidate.source_type)}</td>
+                            <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.similarity_score}</td>
+                            <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.risk_level}</td>
+                            <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.evidence_summary}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
               </CardContent>
             </Card>
+
+            {fallbackCandidates.length > 0 && (
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-xl text-foreground">Hipóteses locais geradas porque nenhuma fonte externa retornou evidências suficientes</CardTitle>
+                  <CardDescription>
+                    Estas hipóteses não vêm da web nem da base de concorrentes. Elas são geradas localmente para orientar a próxima busca.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {fallbackCandidates.map((candidate, index) => (
+                    <div key={`${candidate.name}-fallback-${index}`} className="rounded-md border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">Não é evidência externa</Badge>
+                        <Badge variant="outline">{candidate.candidate_type}</Badge>
+                        <Badge variant="outline">Similaridade {candidate.similarity_score}</Badge>
+                      </div>
+                      <h3 className="mt-3 font-semibold text-foreground">{candidate.name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{candidate.description}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Este item é apenas uma hipótese para investigação.</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{candidate.evidence_summary}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="border-border bg-card">
               <CardHeader>
