@@ -47,6 +47,8 @@ interface ReviewIssueGroup {
   idea_id: string | null
   current_issue_status: string
   points_estimate: number
+  suggested_points: number
+  suggested_points_source: string
   finalized_at: string | null
   activeWorkers: number
   submittedCount: number
@@ -62,6 +64,7 @@ export default function ResponsavelRevisarPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [reviewGroups, setReviewGroups] = useState<ReviewIssueGroup[]>([])
   const [pointsByAssignment, setPointsByAssignment] = useState<Record<string, string>>({})
+  const [suggestedPointsByAssignment, setSuggestedPointsByAssignment] = useState<Record<string, number>>({})
   const [commentsByAssignment, setCommentsByAssignment] = useState<Record<string, string>>({})
   const [pullRequestByAssignment, setPullRequestByAssignment] = useState<Record<string, string>>({})
   const [mergePrByAssignment, setMergePrByAssignment] = useState<Record<string, boolean>>({})
@@ -112,7 +115,7 @@ export default function ResponsavelRevisarPage() {
       const nextGroups: ReviewIssueGroup[] = result.data || []
       const nextAssignments = nextGroups.flatMap((group) => group.assignments.map((assignment) => ({
         ...assignment,
-        pointsEstimate: group.points_estimate,
+        suggestedPoints: group.suggested_points || group.points_estimate || 10,
       })))
 
       setReviewGroups(nextGroups)
@@ -120,7 +123,15 @@ export default function ResponsavelRevisarPage() {
         Object.fromEntries(
           nextAssignments.map((assignment) => [
             assignment.assignment_id,
-            String(assignment.accepted_points || assignment.pointsEstimate || 10),
+            String(assignment.accepted_points || assignment.suggestedPoints || 10),
+          ]),
+        ),
+      )
+      setSuggestedPointsByAssignment(
+        Object.fromEntries(
+          nextAssignments.map((assignment) => [
+            assignment.assignment_id,
+            Number(assignment.suggestedPoints || 10),
           ]),
         ),
       )
@@ -157,6 +168,12 @@ export default function ResponsavelRevisarPage() {
     setMessage(null)
 
     try {
+      const typedPoints = Number(pointsByAssignment[assignment.assignment_id])
+      const suggestedPoints = suggestedPointsByAssignment[assignment.assignment_id]
+      const reviewerPoints = decision === "accepted" && Number.isFinite(typedPoints) && typedPoints !== suggestedPoints
+        ? typedPoints
+        : undefined
+
       const response = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,7 +181,7 @@ export default function ResponsavelRevisarPage() {
           assignmentId: assignment.assignment_id,
           ownerEmail,
           decision,
-          points: decision === "accepted" ? Number(pointsByAssignment[assignment.assignment_id]) : undefined,
+          points: reviewerPoints,
           reviewComment: commentsByAssignment[assignment.assignment_id] || undefined,
           mergePr: decision === "accepted" ? Boolean(mergePrByAssignment[assignment.assignment_id]) : false,
           pullRequestUrl: pullRequestByAssignment[assignment.assignment_id] || undefined,
@@ -237,6 +254,12 @@ export default function ResponsavelRevisarPage() {
             </div>
           </div>
           <ThemeToggle />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <a href="/responsavel/colabscore">Configurar ColabScore</a>
+          </Button>
         </div>
 
         <Card className="border-border bg-card">
@@ -391,6 +414,9 @@ export default function ResponsavelRevisarPage() {
                           }
                           className="bg-input"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Pontuação sugerida pelo ColabScore: {suggestedPointsByAssignment[assignment.assignment_id] || group.suggested_points || group.points_estimate || 10}. Você pode ajustar antes de aceitar.
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`comment-${assignment.assignment_id}`}>Comentário da revisão</Label>

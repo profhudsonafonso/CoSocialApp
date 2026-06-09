@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { calculateColabScore, getEffectiveColabScoreConfig } from '@/lib/colabscore'
 import { mergeGitHubPullRequest, parseGitHubPullRequestNumber } from '@/lib/github'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -65,6 +66,26 @@ interface ReviewIdeaRecord {
   github_repo: string | null
 }
 
+interface ProjectColabScoreSettingRecord {
+  idea_id: string
+  reference_hourly_value: number | string | null
+  default_validated_hours: number | string | null
+  default_delivery_factor: number | string | null
+  default_impact_factor: number | string | null
+  default_risk_factor: number | string | null
+  min_points: number | string | null
+  max_points: number | string | null
+}
+
+interface IssueColabScoreSettingRecord {
+  project_issue_id: string
+  validated_hours: number | string | null
+  delivery_factor: number | string | null
+  impact_factor: number | string | null
+  risk_factor: number | string | null
+  manual_points: number | string | null
+}
+
 function normalizeStatusFilter(value: string | null): ReviewStatusFilter {
   if (value === 'accepted' || value === 'rejected' || value === 'all') {
     return value
@@ -93,6 +114,113 @@ async function getIssueAssignmentCounts(issueIds: string[]) {
   }
 
   return assignmentsByIssueId
+}
+
+async function getColabScoreContext(ideaIds: string[], issueIds: string[]) {
+  const [projectSettingsResult, issueSettingsResult] = await Promise.all([
+    ideaIds.length > 0
+      ? supabaseAdmin
+        .from('project_colabscore_settings')
+        .select('idea_id, reference_hourly_value, default_validated_hours, default_delivery_factor, default_impact_factor, default_risk_factor, min_points, max_points')
+        .in('idea_id', ideaIds)
+        .returns<ProjectColabScoreSettingRecord[]>()
+      : { data: [], error: null },
+    issueIds.length > 0
+      ? supabaseAdmin
+        .from('issue_colabscore_settings')
+        .select('project_issue_id, validated_hours, delivery_factor, impact_factor, risk_factor, manual_points')
+        .in('project_issue_id', issueIds)
+        .returns<IssueColabScoreSettingRecord[]>()
+      : { data: [], error: null },
+  ])
+
+  if (projectSettingsResult.error) {
+    throw new Error(projectSettingsResult.error.message)
+  }
+
+  if (issueSettingsResult.error) {
+    throw new Error(issueSettingsResult.error.message)
+  }
+
+  return {
+    projectSettingsByIdeaId: new Map((projectSettingsResult.data || []).map((setting) => [setting.idea_id, setting])),
+    issueSettingsByIssueId: new Map((issueSettingsResult.data || []).map((setting) => [setting.project_issue_id, setting])),
+  }
+}
+
+function getSuggestedPoints(
+  issue: Pick<ProjectIssueRecord, 'id' | 'idea_id' | 'points_estimate'>,
+  projectSettingsByIdeaId: Map<string, ProjectColabScoreSettingRecord>,
+  issueSettingsByIssueId: Map<string, IssueColabScoreSettingRecord>,
+) {
+  const projectSettings = projectSettingsByIdeaId.get(issue.idea_id) || null
+  const issueSettings = issueSettingsByIssueId.get(issue.id) || null
+
+  if (projectSettings || issueSettings) {
+    const effectiveConfig = getEffectiveColabScoreConfig(projectSettings, issueSettings)
+
+    return {
+      points: calculateColabScore(effectiveConfig),
+      source: issueSettings?.manual_points ? 'issue_manual_points' : 'colabscore_formula',
+    }
+  }
+
+  if (issue.points_estimate) {
+    return { points: issue.points_estimate, source: 'issue_points_estimate' }
+  }
+
+  return { points: 10, source: 'fallback' }
+}
+
+async function resolveAcceptedPoints(
+  issue: ReviewIssueRecord,
+  reviewerPoints: unknown,
+) {
+  const manualReviewPoints = Number(reviewerPoints)
+
+  if (Number.isFinite(manualReviewPoints) && manualReviewPoints > 0) {
+    return {
+      points: Math.round(manualReviewPoints),
+      reason: 'Pontuação definida manualmente pelo responsável na revisão.',
+    }
+  }
+
+  const { projectSettingsByIdeaId, issueSettingsByIssueId } = await getColabScoreContext(
+    [issue.idea_id],
+    [issue.id],
+  )
+  const projectSettings = projectSettingsByIdeaId.get(issue.idea_id) || null
+  const issueSettings = issueSettingsByIssueId.get(issue.id) || null
+
+  if (issueSettings?.manual_points) {
+    const effectiveConfig = getEffectiveColabScoreConfig(projectSettings, issueSettings)
+
+    return {
+      points: calculateColabScore(effectiveConfig),
+      reason: 'Pontuação definida pelos pontos manuais da issue no ColabScore.',
+    }
+  }
+
+  if (projectSettings || issueSettings) {
+    const effectiveConfig = getEffectiveColabScoreConfig(projectSettings, issueSettings)
+
+    return {
+      points: calculateColabScore(effectiveConfig),
+      reason: 'Pontuação calculada pela fórmula do ColabScore.',
+    }
+  }
+
+  if (issue.points_estimate) {
+    return {
+      points: issue.points_estimate,
+      reason: 'Pontuação baseada na estimativa da issue.',
+    }
+  }
+
+  return {
+    points: 10,
+    reason: 'Pontuação fallback padrão.',
+  }
 }
 
 export async function GET(request: Request) {
@@ -142,6 +270,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: [] }, { status: 200 })
   }
 
+  let colabScoreContext
+  try {
+    colabScoreContext = await getColabScoreContext(ideaIds, issues.map((issue) => issue.id))
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Erro ao carregar ColabScore.' },
+      { status: 500 },
+    )
+  }
+
   const allAssignmentsByIssueId = await getIssueAssignmentCounts(issues.map((issue) => issue.id))
   const collaboratorIds = Array.from(
     new Set(
@@ -169,6 +307,11 @@ export async function GET(request: Request) {
     .map((issue) => {
       const idea = ideasById.get(issue.idea_id)
       const allAssignments = allAssignmentsByIssueId.get(issue.id) || []
+      const suggestedPoints = getSuggestedPoints(
+        issue,
+        colabScoreContext.projectSettingsByIdeaId,
+        colabScoreContext.issueSettingsByIssueId,
+      )
       const filteredAssignments = statusFilter === 'all'
         ? allAssignments
         : allAssignments.filter((assignment) => assignment.status === statusFilter)
@@ -182,6 +325,8 @@ export async function GET(request: Request) {
         idea_id: idea?.id || null,
         current_issue_status: issue.status,
         points_estimate: issue.points_estimate || 10,
+        suggested_points: suggestedPoints.points,
+        suggested_points_source: suggestedPoints.source,
         finalized_at: issue.finalized_at,
         activeWorkers: allAssignments.filter((assignment) => ['claimed', 'submitted'].includes(assignment.status || '')).length,
         submittedCount: allAssignments.filter((assignment) => assignment.status === 'submitted').length,
@@ -342,9 +487,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: { status: 'rejected' } }, { status: 200 })
   }
 
-  const acceptedPoints = Number.isFinite(Number(points))
-    ? Number(points)
-    : issue.points_estimate || 10
+  const acceptedPointsResult = await resolveAcceptedPoints(issue, points)
+  const acceptedPoints = acceptedPointsResult.points
 
   if (acceptedPoints <= 0) {
     return NextResponse.json(
@@ -435,7 +579,9 @@ export async function POST(request: Request) {
           idea_id: issue.idea_id,
           assignment_id: assignment.id,
           points: acceptedPoints,
-          reason: normalizedComment || 'Contribuição aceita pelo responsável do projeto.',
+          reason: normalizedComment
+            ? `${acceptedPointsResult.reason} ${normalizedComment}`
+            : acceptedPointsResult.reason,
         },
       ])
 

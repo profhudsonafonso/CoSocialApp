@@ -34,6 +34,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/init.sql` to create the base tables, views and seed data.
    - `supabase/github_issue_flow.sql` to add the GitHub issue contribution flow database layer.
    - `supabase/allow_multiple_collaborators_per_issue.sql` to allow multiple collaborators per issue and add explicit issue finalization.
+   - `supabase/colabscore_configuration.sql` to add project and issue-level ColabScore settings.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
 ## GitHub Webhook
