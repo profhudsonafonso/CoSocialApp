@@ -14,6 +14,7 @@ interface ProjectIssueRecord {
   issue_number: number
   title: string
   html_url: string | null
+  status: string | null
 }
 
 interface AssignmentRecord {
@@ -71,7 +72,7 @@ export async function GET() {
       .returns<IdeaRecord[]>(),
     supabaseAdmin
       .from('project_issues')
-      .select('id, idea_id, issue_number, title, html_url')
+      .select('id, idea_id, issue_number, title, html_url, status')
       .returns<ProjectIssueRecord[]>(),
     supabaseAdmin
       .from('issue_assignments')
@@ -127,9 +128,10 @@ export async function GET() {
     )
   }
 
-  // TODO: In a future task, parameterize ColabScore per GitHub issue using estimated hours, risk factor, delivery factor, impact factor, and reference value.
-  // TODO: In a future task, parse GitHub labels like hours:4, risk:high, impact:medium to prefill ColabScore fields.
+  // TODO: Later, parameterize each issue with ColabScore fields such as estimated hours, risk factor, delivery factor, impact factor, and reference hourly value. These may be parsed from GitHub labels such as hours:4, risk:high, impact:medium.
   const acceptedAssignments = assignments.filter((assignment) => assignment.status === 'accepted')
+  const activeAssignments = assignments.filter((assignment) => ['claimed', 'submitted'].includes(assignment.status || ''))
+  const finalizedIssues = issues.filter((issue) => issue.status === 'finalized')
   const pointsByAcceptedAssignmentId = new Map<string, number>()
 
   for (const assignment of acceptedAssignments) {
@@ -151,6 +153,7 @@ export async function GET() {
     const projectIssues = issues.filter((issue) => issue.idea_id === idea.id)
     const projectIssueIds = new Set(projectIssues.map((issue) => issue.id))
     const projectAssignments = assignments.filter((assignment) => projectIssueIds.has(assignment.project_issue_id))
+    const projectActiveAssignments = projectAssignments.filter((assignment) => ['claimed', 'submitted'].includes(assignment.status || ''))
     const projectAcceptedAssignments = projectAssignments.filter((assignment) => assignment.status === 'accepted')
     const projectPointsFromRows = colabPoints
       .filter((point) => point.idea_id === idea.id)
@@ -169,10 +172,12 @@ export async function GET() {
       ownerEmail: idea.email,
       github_repo_url: idea.github_repo_url,
       totalIssues: projectIssues.length,
-      claimedTasks: projectAssignments.filter((assignment) => assignment.status === 'claimed').length,
+      activeTasks: projectActiveAssignments.length,
+      claimedTasks: projectActiveAssignments.length,
       submittedTasks: projectAssignments.filter((assignment) => assignment.status === 'submitted').length,
       acceptedTasks: projectAcceptedAssignments.length,
       rejectedTasks: projectAssignments.filter((assignment) => assignment.status === 'rejected').length,
+      finalizedIssues: projectIssues.filter((issue) => issue.status === 'finalized').length,
       totalPoints: sum(projectPointsFromRows) + sum(fallbackAcceptedPoints),
       lastAcceptedAt,
     }
@@ -226,10 +231,12 @@ export async function GET() {
     overview: {
       totalProjects: ideas.length,
       totalIssues: issues.length,
+      activeTasks: activeAssignments.length,
       submittedTasks: assignments.filter((assignment) => assignment.status === 'submitted').length,
       reviewedTasks: assignments.filter((assignment) => ['accepted', 'rejected'].includes(assignment.status || '')).length,
       acceptedTasks: acceptedAssignments.length,
       rejectedTasks: assignments.filter((assignment) => assignment.status === 'rejected').length,
+      finalizedIssues: finalizedIssues.length,
       totalPoints,
       activeCollaborators: activeCollaboratorIds.size,
     },

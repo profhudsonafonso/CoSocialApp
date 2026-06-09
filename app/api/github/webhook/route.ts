@@ -140,6 +140,7 @@ export async function POST(request: Request) {
       .from('project_issues')
       .update({ status: 'submitted' })
       .eq('id', assignment.project_issue_id)
+      .eq('status', 'open')
 
     if (issueUpdateError) {
       return NextResponse.json({ error: issueUpdateError.message }, { status: 500 })

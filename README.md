@@ -33,6 +33,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 3. Open the Supabase SQL editor and execute the SQL files in this order:
    - `supabase/init.sql` to create the base tables, views and seed data.
    - `supabase/github_issue_flow.sql` to add the GitHub issue contribution flow database layer.
+   - `supabase/allow_multiple_collaborators_per_issue.sql` to allow multiple collaborators per issue and add explicit issue finalization.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
 ## GitHub Webhook
@@ -61,6 +62,12 @@ COSOCIAL:CS-ABC12345 fix issue #12
 ```
 
 The webhook only marks matching assignments and issues as `submitted`. Points are awarded later after owner review.
+
+## Fluxo com múltiplos colaboradores
+
+Uma issue do GitHub pode receber contribuições de vários colaboradores ao mesmo tempo. Cada colaborador mantém sua própria assignment, branch e evidência.
+
+Aceitar uma entrega pontua o colaborador, mas não fecha a issue automaticamente. O responsável deve finalizar a issue na tela de revisão para encerrar novas contribuições.
 
 ## Dashboard real
 

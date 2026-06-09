@@ -68,10 +68,12 @@ interface Collaborator {
 interface DashboardOverview {
   totalProjects: number
   totalIssues: number
+  activeTasks: number
   submittedTasks: number
   reviewedTasks: number
   acceptedTasks: number
   rejectedTasks: number
+  finalizedIssues: number
   totalPoints: number
   activeCollaborators: number
 }
@@ -82,10 +84,12 @@ interface DashboardProject {
   ownerEmail?: string | null
   github_repo_url?: string | null
   totalIssues: number
+  activeTasks: number
   claimedTasks: number
   submittedTasks: number
   acceptedTasks: number
   rejectedTasks: number
+  finalizedIssues: number
   totalPoints: number
   lastAcceptedAt?: string | null
 }
@@ -1025,8 +1029,8 @@ function DashboardSection() {
               </Card>
               <Card className="bg-card border-border">
                 <CardContent className="p-5">
-                  <div className="text-sm text-muted-foreground">Tarefas aceitas</div>
-                  <div className="text-3xl font-bold text-foreground mt-2">{dashboard.overview.acceptedTasks}</div>
+                  <div className="text-sm text-muted-foreground">Tarefas ativas</div>
+                  <div className="text-3xl font-bold text-foreground mt-2">{dashboard.overview.activeTasks}</div>
                 </CardContent>
               </Card>
               <Card className="bg-card border-border">
@@ -1041,7 +1045,7 @@ function DashboardSection() {
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Visão Geral de Projetos</CardTitle>
                 <CardDescription>
-                  {dashboard.overview.submittedTasks} tarefa(s) submetida(s), {dashboard.overview.reviewedTasks} revisada(s), {dashboard.overview.activeCollaborators} colaborador(es) ativo(s)
+                  {dashboard.overview.submittedTasks} tarefa(s) submetida(s), {dashboard.overview.reviewedTasks} revisada(s), {dashboard.overview.finalizedIssues} issue(s) finalizada(s), {dashboard.overview.activeCollaborators} colaborador(es) ativo(s)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1058,6 +1062,7 @@ function DashboardSection() {
                           <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Submetidas</th>
                           <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Aceitas</th>
                           <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Rejeitadas</th>
+                          <th className="text-center py-3 px-4 text-sm font-semibold text-muted-foreground">Finalizadas</th>
                           <th className="text-right py-3 px-4 text-sm font-semibold text-muted-foreground">Pontos</th>
                         </tr>
                       </thead>
@@ -1069,10 +1074,11 @@ function DashboardSection() {
                               <div className="text-xs text-muted-foreground">{project.ownerEmail || 'Responsável não informado'}</div>
                             </td>
                             <td className="py-3 px-4 text-center text-muted-foreground">{project.totalIssues}</td>
-                            <td className="py-3 px-4 text-center text-muted-foreground">{project.claimedTasks}</td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.activeTasks ?? project.claimedTasks}</td>
                             <td className="py-3 px-4 text-center text-muted-foreground">{project.submittedTasks}</td>
                             <td className="py-3 px-4 text-center text-secondary">{project.acceptedTasks}</td>
                             <td className="py-3 px-4 text-center text-muted-foreground">{project.rejectedTasks}</td>
+                            <td className="py-3 px-4 text-center text-muted-foreground">{project.finalizedIssues}</td>
                             <td className="py-3 px-4 text-right font-semibold text-accent">{project.totalPoints.toLocaleString('pt-BR')}</td>
                           </tr>
                         ))}

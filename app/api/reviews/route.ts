@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { mergeGitHubPullRequest, parseGitHubPullRequestNumber } from '@/lib/github'
 import { supabaseAdmin } from '@/lib/supabase'
 
+type ReviewStatusFilter = 'submitted' | 'accepted' | 'rejected' | 'all'
+
 interface IdeaRecord {
   id: string
   nome_projeto: string
@@ -14,8 +16,10 @@ interface ProjectIssueRecord {
   idea_id: string
   issue_number: number
   title: string
+  html_url: string | null
   points_estimate: number | null
   status: string | null
+  finalized_at: string | null
 }
 
 interface AssignmentRecord {
@@ -23,6 +27,7 @@ interface AssignmentRecord {
   project_issue_id: string
   collaborator_id: string
   claim_key: string
+  branch_name: string
   status: string | null
   evidence_url: string | null
   accepted_points: number | null
@@ -30,6 +35,8 @@ interface AssignmentRecord {
   pull_request_number: number | null
   pull_request_url: string | null
   merged_at: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 interface CollaboratorRecord {
@@ -42,6 +49,7 @@ interface ReviewAssignmentRecord {
   id: string
   project_issue_id: string
   collaborator_id: string
+  status: string | null
 }
 
 interface ReviewIssueRecord {
@@ -57,9 +65,41 @@ interface ReviewIdeaRecord {
   github_repo: string | null
 }
 
+function normalizeStatusFilter(value: string | null): ReviewStatusFilter {
+  if (value === 'accepted' || value === 'rejected' || value === 'all') {
+    return value
+  }
+
+  return 'submitted'
+}
+
+async function getIssueAssignmentCounts(issueIds: string[]) {
+  if (issueIds.length === 0) {
+    return new Map<string, AssignmentRecord[]>()
+  }
+
+  const { data } = await supabaseAdmin
+    .from('issue_assignments')
+    .select('id, project_issue_id, collaborator_id, claim_key, branch_name, status, evidence_url, accepted_points, review_comment, pull_request_number, pull_request_url, merged_at, created_at, updated_at')
+    .in('project_issue_id', issueIds)
+    .returns<AssignmentRecord[]>()
+
+  const assignmentsByIssueId = new Map<string, AssignmentRecord[]>()
+
+  for (const assignment of data || []) {
+    const issueAssignments = assignmentsByIssueId.get(assignment.project_issue_id) || []
+    issueAssignments.push(assignment)
+    assignmentsByIssueId.set(assignment.project_issue_id, issueAssignments)
+  }
+
+  return assignmentsByIssueId
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const ownerEmail = searchParams.get('ownerEmail')?.trim()
+  const statusFilter = normalizeStatusFilter(searchParams.get('status'))
+  const issueId = searchParams.get('issueId')?.trim()
 
   if (!ownerEmail) {
     return NextResponse.json(
@@ -83,11 +123,16 @@ export async function GET(request: Request) {
   }
 
   const ideaIds = ideas.map((idea) => idea.id)
-  const { data: issues, error: issuesError } = await supabaseAdmin
+  let issuesQuery = supabaseAdmin
     .from('project_issues')
-    .select('id, idea_id, issue_number, title, points_estimate, status')
+    .select('id, idea_id, issue_number, title, html_url, points_estimate, status, finalized_at')
     .in('idea_id', ideaIds)
-    .returns<ProjectIssueRecord[]>()
+
+  if (issueId) {
+    issuesQuery = issuesQuery.eq('id', issueId)
+  }
+
+  const { data: issues, error: issuesError } = await issuesQuery.returns<ProjectIssueRecord[]>()
 
   if (issuesError) {
     return NextResponse.json({ error: issuesError.message }, { status: 500 })
@@ -97,69 +142,84 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: [] }, { status: 200 })
   }
 
-  const issueIds = issues.map((issue) => issue.id)
-  const { data: assignments, error: assignmentsError } = await supabaseAdmin
-    .from('issue_assignments')
-    .select('id, project_issue_id, collaborator_id, claim_key, status, evidence_url, accepted_points, review_comment, pull_request_number, pull_request_url, merged_at')
-    .in('project_issue_id', issueIds)
-    .eq('status', 'submitted')
-    .returns<AssignmentRecord[]>()
-
-  if (assignmentsError) {
-    return NextResponse.json({ error: assignmentsError.message }, { status: 500 })
-  }
-
-  if (!assignments || assignments.length === 0) {
-    return NextResponse.json({ data: [] }, { status: 200 })
-  }
-
-  const collaboratorIds = assignments.map((assignment) => assignment.collaborator_id)
-  const { data: collaborators, error: collaboratorsError } = await supabaseAdmin
-    .from('collaborators')
-    .select('id, nome, email')
-    .in('id', collaboratorIds)
-    .returns<CollaboratorRecord[]>()
+  const allAssignmentsByIssueId = await getIssueAssignmentCounts(issues.map((issue) => issue.id))
+  const collaboratorIds = Array.from(
+    new Set(
+      Array.from(allAssignmentsByIssueId.values())
+        .flat()
+        .map((assignment) => assignment.collaborator_id),
+    ),
+  )
+  const { data: collaborators, error: collaboratorsError } = collaboratorIds.length > 0
+    ? await supabaseAdmin
+      .from('collaborators')
+      .select('id, nome, email')
+      .in('id', collaboratorIds)
+      .returns<CollaboratorRecord[]>()
+    : { data: [], error: null }
 
   if (collaboratorsError) {
     return NextResponse.json({ error: collaboratorsError.message }, { status: 500 })
   }
 
   const ideasById = new Map(ideas.map((idea) => [idea.id, idea]))
-  const issuesById = new Map(issues.map((issue) => [issue.id, issue]))
   const collaboratorsById = new Map((collaborators || []).map((collaborator) => [collaborator.id, collaborator]))
 
-  const reviews = assignments.map((assignment) => {
-    const issue = issuesById.get(assignment.project_issue_id)
-    const idea = issue ? ideasById.get(issue.idea_id) : undefined
-    const collaborator = collaboratorsById.get(assignment.collaborator_id)
+  const data = issues
+    .map((issue) => {
+      const idea = ideasById.get(issue.idea_id)
+      const allAssignments = allAssignmentsByIssueId.get(issue.id) || []
+      const filteredAssignments = statusFilter === 'all'
+        ? allAssignments
+        : allAssignments.filter((assignment) => assignment.status === statusFilter)
 
-    return {
-      assignment_id: assignment.id,
-      project_issue_id: assignment.project_issue_id,
-      project_name: idea?.nome_projeto || '',
-      idea_id: idea?.id || null,
-      issue_title: issue?.title || '',
-      issue_number: issue?.issue_number || null,
-      points_estimate: issue?.points_estimate || 10,
-      collaborator_name: collaborator?.nome || '',
-      collaborator_email: collaborator?.email || '',
-      claim_key: assignment.claim_key,
-      evidence_url: assignment.evidence_url,
-      status: assignment.status,
-      review_comment: assignment.review_comment,
-      accepted_points: assignment.accepted_points,
-      pull_request_number: assignment.pull_request_number,
-      pull_request_url: assignment.pull_request_url,
-      merged_at: assignment.merged_at,
-    }
-  })
+      return {
+        issue_id: issue.id,
+        issue_number: issue.issue_number,
+        issue_title: issue.title,
+        github_issue_url: issue.html_url,
+        project_title: idea?.nome_projeto || '',
+        idea_id: idea?.id || null,
+        current_issue_status: issue.status,
+        points_estimate: issue.points_estimate || 10,
+        finalized_at: issue.finalized_at,
+        activeWorkers: allAssignments.filter((assignment) => ['claimed', 'submitted'].includes(assignment.status || '')).length,
+        submittedCount: allAssignments.filter((assignment) => assignment.status === 'submitted').length,
+        acceptedCount: allAssignments.filter((assignment) => assignment.status === 'accepted').length,
+        rejectedCount: allAssignments.filter((assignment) => assignment.status === 'rejected').length,
+        assignments: filteredAssignments.map((assignment) => {
+          const collaborator = collaboratorsById.get(assignment.collaborator_id)
 
-  return NextResponse.json({ data: reviews }, { status: 200 })
+          return {
+            assignment_id: assignment.id,
+            collaborator_name: collaborator?.nome || '',
+            collaborator_email: collaborator?.email || '',
+            claim_key: assignment.claim_key,
+            branch_name: assignment.branch_name,
+            status: assignment.status,
+            evidence_url: assignment.evidence_url,
+            accepted_points: assignment.accepted_points,
+            review_comment: assignment.review_comment,
+            pull_request_number: assignment.pull_request_number,
+            pull_request_url: assignment.pull_request_url,
+            merged_at: assignment.merged_at,
+            created_at: assignment.created_at,
+            updated_at: assignment.updated_at,
+          }
+        }),
+      }
+    })
+    .filter((issueGroup) => issueGroup.assignments.length > 0)
+    .sort((a, b) => a.issue_number - b.issue_number)
+
+  return NextResponse.json({ data }, { status: 200 })
 }
 
 export async function POST(request: Request) {
   const {
     assignmentId,
+    issueId,
+    ownerEmail,
     decision,
     points,
     reviewComment,
@@ -168,16 +228,67 @@ export async function POST(request: Request) {
     pullRequestUrl,
   } = await request.json()
 
-  if (!assignmentId || !['accepted', 'rejected'].includes(decision)) {
+  if (!['accepted', 'rejected', 'finalized'].includes(decision)) {
     return NextResponse.json(
-      { error: 'assignmentId e decision accepted/rejected são obrigatórios.' },
+      { error: 'decision accepted/rejected/finalized é obrigatória.' },
+      { status: 400 },
+    )
+  }
+
+  if (decision === 'finalized') {
+    if (!assignmentId && !issueId) {
+      return NextResponse.json(
+        { error: 'assignmentId ou issueId é obrigatório para finalizar.' },
+        { status: 400 },
+      )
+    }
+
+    let targetIssueId = typeof issueId === 'string' ? issueId : null
+    let selectedAssignmentId: string | null = null
+
+    if (assignmentId) {
+      const { data: assignment, error: assignmentError } = await supabaseAdmin
+        .from('issue_assignments')
+        .select('id, project_issue_id, status')
+        .eq('id', assignmentId)
+        .single<ReviewAssignmentRecord>()
+
+      if (assignmentError || !assignment) {
+        return NextResponse.json({ error: 'Assignment não encontrado.' }, { status: 404 })
+      }
+
+      targetIssueId = assignment.project_issue_id
+      selectedAssignmentId = assignment.status === 'accepted' ? assignment.id : null
+    }
+
+    const finalizedAt = new Date().toISOString()
+    const { error: finalizeError } = await supabaseAdmin
+      .from('project_issues')
+      .update({
+        status: 'finalized',
+        finalized_at: finalizedAt,
+        finalized_by_email: typeof ownerEmail === 'string' ? ownerEmail.trim() : null,
+        ...(selectedAssignmentId ? { selected_assignment_id: selectedAssignmentId } : {}),
+      })
+      .eq('id', targetIssueId)
+
+    if (finalizeError) {
+      return NextResponse.json({ error: finalizeError.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ data: { status: 'finalized', finalized_at: finalizedAt } }, { status: 200 })
+  }
+
+  if (!assignmentId) {
+    return NextResponse.json(
+      { error: 'assignmentId é obrigatório para aceitar ou rejeitar.' },
       { status: 400 },
     )
   }
 
   const { data: assignment, error: assignmentError } = await supabaseAdmin
     .from('issue_assignments')
-    .select('id, project_issue_id, collaborator_id')
+    .select('id, project_issue_id, collaborator_id, status')
     .eq('id', assignmentId)
     .single<ReviewAssignmentRecord>()
 
@@ -226,15 +337,6 @@ export async function POST(request: Request) {
 
     if (assignmentUpdateError) {
       return NextResponse.json({ error: assignmentUpdateError.message }, { status: 500 })
-    }
-
-    const { error: issueUpdateError } = await supabaseAdmin
-      .from('project_issues')
-      .update({ status: 'rejected' })
-      .eq('id', issue.id)
-
-    if (issueUpdateError) {
-      return NextResponse.json({ error: issueUpdateError.message }, { status: 500 })
     }
 
     return NextResponse.json({ data: { status: 'rejected' } }, { status: 200 })
@@ -305,27 +407,41 @@ export async function POST(request: Request) {
 
   const { error: issueUpdateError } = await supabaseAdmin
     .from('project_issues')
-    .update({ status: 'accepted' })
+    .update({
+      status: 'accepted',
+      selected_assignment_id: assignment.id,
+    })
     .eq('id', issue.id)
 
   if (issueUpdateError) {
     return NextResponse.json({ error: issueUpdateError.message }, { status: 500 })
   }
 
-  const { error: pointsInsertError } = await supabaseAdmin
+  const { data: existingPoints, error: existingPointsError } = await supabaseAdmin
     .from('colab_points')
-    .insert([
-      {
-        collaborator_id: assignment.collaborator_id,
-        idea_id: issue.idea_id,
-        assignment_id: assignment.id,
-        points: acceptedPoints,
-        reason: normalizedComment || 'Contribuição aceita pelo responsável do projeto.',
-      },
-    ])
+    .select('id')
+    .eq('assignment_id', assignment.id)
 
-  if (pointsInsertError) {
-    return NextResponse.json({ error: pointsInsertError.message }, { status: 500 })
+  if (existingPointsError) {
+    return NextResponse.json({ error: existingPointsError.message }, { status: 500 })
+  }
+
+  if (!existingPoints || existingPoints.length === 0) {
+    const { error: pointsInsertError } = await supabaseAdmin
+      .from('colab_points')
+      .insert([
+        {
+          collaborator_id: assignment.collaborator_id,
+          idea_id: issue.idea_id,
+          assignment_id: assignment.id,
+          points: acceptedPoints,
+          reason: normalizedComment || 'Contribuição aceita pelo responsável do projeto.',
+        },
+      ])
+
+    if (pointsInsertError) {
+      return NextResponse.json({ error: pointsInsertError.message }, { status: 500 })
+    }
   }
 
   return NextResponse.json(

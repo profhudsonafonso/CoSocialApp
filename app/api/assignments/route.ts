@@ -14,8 +14,25 @@ interface ProjectIssueRecord {
   status: string | null
 }
 
+interface AssignmentRecord {
+  id: string
+  claim_key: string
+  branch_name: string
+  status: string | null
+}
+
 function generateClaimKey() {
   return `CS-${randomBytes(4).toString('hex').toUpperCase()}`
+}
+
+async function getActiveWorkers(projectIssueId: string) {
+  const { data } = await supabaseAdmin
+    .from('issue_assignments')
+    .select('id')
+    .eq('project_issue_id', projectIssueId)
+    .in('status', ['claimed', 'submitted'])
+
+  return data?.length || 0
 }
 
 export async function POST(request: Request) {
@@ -55,17 +72,44 @@ export async function POST(request: Request) {
     )
   }
 
-  if (issue.status !== 'open') {
+  if (issue.status === 'finalized') {
     return NextResponse.json(
-      { error: 'Esta issue não está aberta para ser pega.' },
+      { error: 'Esta issue foi finalizada e não aceita novas contribuições.' },
       { status: 409 },
+    )
+  }
+
+  const { data: existingAssignment } = await supabaseAdmin
+    .from('issue_assignments')
+    .select('id, claim_key, branch_name, status')
+    .eq('project_issue_id', issue.id)
+    .eq('collaborator_id', collaborator.id)
+    .maybeSingle<AssignmentRecord>()
+
+  if (existingAssignment) {
+    const activeWorkers = await getActiveWorkers(issue.id)
+
+    return NextResponse.json(
+      {
+        data: {
+          assignment_id: existingAssignment.id,
+          claim_key: existingAssignment.claim_key,
+          branch_name: existingAssignment.branch_name,
+          assignment_status: existingAssignment.status,
+          issue_number: issue.issue_number,
+          issue_title: issue.title,
+          html_url: issue.html_url,
+          activeWorkers,
+        },
+      },
+      { status: 200 },
     )
   }
 
   const claimKey = generateClaimKey()
   const branchName = `cosocial/${claimKey}`
 
-  const { error: assignmentError } = await supabaseAdmin
+  const { data: assignment, error: assignmentError } = await supabaseAdmin
     .from('issue_assignments')
     .insert([
       {
@@ -75,28 +119,26 @@ export async function POST(request: Request) {
         branch_name: branchName,
       },
     ])
+    .select('id, claim_key, branch_name, status')
+    .single<AssignmentRecord>()
 
-  if (assignmentError) {
-    return NextResponse.json({ error: assignmentError.message }, { status: 500 })
+  if (assignmentError || !assignment) {
+    return NextResponse.json({ error: assignmentError?.message || 'Erro ao criar assignment.' }, { status: 500 })
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from('project_issues')
-    .update({ status: 'claimed' })
-    .eq('id', issue.id)
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
-  }
+  const activeWorkers = await getActiveWorkers(issue.id)
 
   return NextResponse.json(
     {
       data: {
-        claim_key: claimKey,
-        branch_name: branchName,
+        assignment_id: assignment.id,
+        claim_key: assignment.claim_key,
+        branch_name: assignment.branch_name,
+        assignment_status: assignment.status,
         issue_number: issue.issue_number,
         issue_title: issue.title,
         html_url: issue.html_url,
+        activeWorkers,
       },
     },
     { status: 201 },

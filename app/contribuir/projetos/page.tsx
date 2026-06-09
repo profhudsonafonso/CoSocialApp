@@ -36,6 +36,11 @@ interface ProjectIssue {
   html_url: string | null
   status: string
   points_estimate: number
+  activeWorkers: number
+  submittedCount: number
+  acceptedCount: number
+  rejectedCount: number
+  isFinalized: boolean
 }
 
 interface ClaimResult {
@@ -44,6 +49,7 @@ interface ClaimResult {
   issue_number: number
   issue_title: string
   html_url: string | null
+  activeWorkers: number
 }
 
 function getLabelName(label: GitHubLabel | string) {
@@ -275,6 +281,9 @@ export default function ContribuirProjetosPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 text-sm">
+                <p className="text-muted-foreground">
+                  {claimResult.activeWorkers} pessoa(s) trabalhando nesta issue.
+                </p>
                 <div>
                   <p className="font-medium text-foreground">1. Create branch:</p>
                   <code className="mt-1 block rounded-md bg-muted p-3 text-muted-foreground">
@@ -327,8 +336,13 @@ export default function ContribuirProjetosPage() {
                       <Badge variant="secondary">#{issue.issue_number}</Badge>
                       <Badge variant="outline">{issue.status}</Badge>
                       <Badge variant="outline">{issue.points_estimate} pts</Badge>
+                      <Badge variant="outline">{issue.activeWorkers} pessoa(s)</Badge>
+                      <Badge variant="outline">{issue.submittedCount} entrega(s)</Badge>
                     </div>
                     <CardTitle className="text-lg text-foreground">{issue.title}</CardTitle>
+                    <CardDescription>
+                      {issue.activeWorkers} pessoa(s) trabalhando nesta issue · {issue.submittedCount} entrega(s) enviada(s)
+                    </CardDescription>
                   </div>
                   {issue.html_url && (
                     <Button variant="outline" size="sm" asChild>
@@ -358,7 +372,7 @@ export default function ContribuirProjetosPage() {
                   type="button"
                   onClick={() => handleClaimIssue(issue.id)}
                   disabled={
-                    issue.status !== "open" ||
+                    issue.isFinalized ||
                     !collaboratorEmail.trim() ||
                     claimingIssueId === issue.id
                   }
