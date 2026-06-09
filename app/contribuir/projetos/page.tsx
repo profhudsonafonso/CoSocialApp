@@ -32,6 +32,7 @@ interface ProjectIssue {
   id: string
   issue_number: number
   title: string
+  body: string | null
   labels: GitHubLabel[] | string[] | null
   html_url: string | null
   status: string
@@ -52,8 +53,54 @@ interface ClaimResult {
   activeWorkers: number
 }
 
+type IssueFilter = "all" | "empty" | "active" | "submitted" | "finalized"
+
 function getLabelName(label: GitHubLabel | string) {
   return typeof label === "string" ? label : label.name
+}
+
+function count(value: number | null | undefined) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0
+}
+
+function getIssueOpportunityLabel(issue: ProjectIssue) {
+  const activeWorkers = count(issue.activeWorkers)
+  const submittedCount = count(issue.submittedCount)
+  const acceptedCount = count(issue.acceptedCount)
+
+  if (issue.isFinalized) {
+    return "Finalizada"
+  }
+
+  if (acceptedCount > 0) {
+    return "Já existe entrega aceita, mas a issue ainda está aberta"
+  }
+
+  if (submittedCount > 0) {
+    return "Competitiva: já existem entregas em análise"
+  }
+
+  if (activeWorkers > 0) {
+    return "Em andamento: já há pessoas trabalhando"
+  }
+
+  return "Boa oportunidade: ninguém começou ainda"
+}
+
+function getIssueSortPriority(issue: ProjectIssue) {
+  if (issue.isFinalized) {
+    return 4
+  }
+
+  if (count(issue.submittedCount) > 0 || count(issue.acceptedCount) > 0 || count(issue.rejectedCount) > 0) {
+    return 3
+  }
+
+  if (count(issue.activeWorkers) > 0) {
+    return 2
+  }
+
+  return 1
 }
 
 export default function ContribuirProjetosPage() {
@@ -61,6 +108,7 @@ export default function ContribuirProjetosPage() {
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [selectedIdeaId, setSelectedIdeaId] = useState("")
   const [issues, setIssues] = useState<ProjectIssue[]>([])
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>("all")
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null)
   const [loadingIdeas, setLoadingIdeas] = useState(true)
   const [loadingIssues, setLoadingIssues] = useState(false)
@@ -74,6 +122,35 @@ export default function ContribuirProjetosPage() {
   )
 
   const selectedIdea = githubIdeas.find((idea) => idea.id === selectedIdeaId)
+  const sortedIssues = useMemo(
+    () => [...issues].sort((a, b) => {
+      const priorityDiff = getIssueSortPriority(a) - getIssueSortPriority(b)
+      return priorityDiff || a.issue_number - b.issue_number
+    }),
+    [issues],
+  )
+  const visibleIssues = useMemo(
+    () => sortedIssues.filter((issue) => {
+      if (issueFilter === "empty") {
+        return !issue.isFinalized && count(issue.activeWorkers) === 0 && count(issue.submittedCount) === 0
+      }
+
+      if (issueFilter === "active") {
+        return !issue.isFinalized && count(issue.activeWorkers) > 0 && count(issue.submittedCount) === 0
+      }
+
+      if (issueFilter === "submitted") {
+        return !issue.isFinalized && count(issue.submittedCount) > 0
+      }
+
+      if (issueFilter === "finalized") {
+        return issue.isFinalized
+      }
+
+      return true
+    }),
+    [issueFilter, sortedIssues],
+  )
 
   const loadIssues = async (ideaId: string) => {
     setLoadingIssues(true)
@@ -281,8 +358,21 @@ export default function ContribuirProjetosPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 text-sm">
+                <div className="grid gap-2 rounded-md border border-border bg-background p-3">
+                  <div>
+                    <span className="font-medium text-foreground">Claim key: </span>
+                    <code className="text-muted-foreground">{claimResult.claim_key}</code>
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Branch: </span>
+                    <code className="text-muted-foreground">{claimResult.branch_name}</code>
+                  </div>
+                </div>
                 <p className="text-muted-foreground">
-                  {claimResult.activeWorkers} pessoa(s) trabalhando nesta issue.
+                  {claimResult.activeWorkers} pessoa(s) já trabalhando nesta issue.
+                </p>
+                <p className="rounded-md border border-accent/30 bg-accent/10 p-3 text-muted-foreground">
+                  Outros colaboradores também podem trabalhar nesta issue. A pontuação depende da revisão e aceite do responsável pelo projeto.
                 </p>
                 <div>
                   <p className="font-medium text-foreground">1. Create branch:</p>
@@ -305,6 +395,36 @@ export default function ContribuirProjetosPage() {
         )}
 
         <section className="grid gap-4">
+          {selectedIdeaId && (
+            <Card className="border-border bg-card">
+              <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Filtrar issues</p>
+                  <p className="text-sm text-muted-foreground">As issues mais abertas aparecem primeiro.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["all", "Todas"],
+                    ["empty", "Sem ninguém trabalhando"],
+                    ["active", "Em andamento"],
+                    ["submitted", "Com entregas enviadas"],
+                    ["finalized", "Finalizadas"],
+                  ].map(([value, label]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant={issueFilter === value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setIssueFilter(value as IssueFilter)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {loadingIssues && (
             <Card className="border-border bg-card">
               <CardContent className="pt-6 text-sm text-muted-foreground">Carregando issues...</CardContent>
@@ -319,6 +439,14 @@ export default function ContribuirProjetosPage() {
             </Card>
           )}
 
+          {!loadingIssues && selectedIdeaId && issues.length > 0 && visibleIssues.length === 0 && (
+            <Card className="border-border bg-card">
+              <CardContent className="pt-6 text-sm text-muted-foreground">
+                Nenhuma issue encontrada para este filtro.
+              </CardContent>
+            </Card>
+          )}
+
           {!selectedIdeaId && !loadingIdeas && (
             <Card className="border-border bg-card">
               <CardContent className="pt-6 text-sm text-muted-foreground">
@@ -327,7 +455,7 @@ export default function ContribuirProjetosPage() {
             </Card>
           )}
 
-          {issues.map((issue) => (
+          {visibleIssues.map((issue) => (
             <Card key={issue.id} className="border-border bg-card">
               <CardHeader className="gap-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -336,13 +464,14 @@ export default function ContribuirProjetosPage() {
                       <Badge variant="secondary">#{issue.issue_number}</Badge>
                       <Badge variant="outline">{issue.status}</Badge>
                       <Badge variant="outline">{issue.points_estimate} pts</Badge>
-                      <Badge variant="outline">{issue.activeWorkers} pessoa(s)</Badge>
-                      <Badge variant="outline">{issue.submittedCount} entrega(s)</Badge>
+                      <Badge variant="outline">{getIssueOpportunityLabel(issue)}</Badge>
                     </div>
                     <CardTitle className="text-lg text-foreground">{issue.title}</CardTitle>
-                    <CardDescription>
-                      {issue.activeWorkers} pessoa(s) trabalhando nesta issue · {issue.submittedCount} entrega(s) enviada(s)
-                    </CardDescription>
+                    {issue.body && (
+                      <CardDescription className="line-clamp-2">
+                        {issue.body}
+                      </CardDescription>
+                    )}
                   </div>
                   {issue.html_url && (
                     <Button variant="outline" size="sm" asChild>
@@ -367,19 +496,38 @@ export default function ContribuirProjetosPage() {
                   </div>
                 )}
               </CardHeader>
-              <CardContent>
-                <Button
-                  type="button"
-                  onClick={() => handleClaimIssue(issue.id)}
-                  disabled={
-                    issue.isFinalized ||
-                    !collaboratorEmail.trim() ||
-                    claimingIssueId === issue.id
-                  }
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  {claimingIssueId === issue.id ? "Pegando..." : "Pegar esta issue"}
-                </Button>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Pessoas trabalhando agora</p>
+                    <p className="mt-1 text-2xl font-semibold text-foreground">{count(issue.activeWorkers)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Entregas enviadas</p>
+                    <p className="mt-1 text-2xl font-semibold text-foreground">{count(issue.submittedCount)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Entregas aceitas</p>
+                    <p className="mt-1 text-2xl font-semibold text-secondary">{count(issue.acceptedCount)}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Entregas rejeitadas</p>
+                    <p className="mt-1 text-2xl font-semibold text-muted-foreground">{count(issue.rejectedCount)}</p>
+                  </div>
+                </div>
+
+                {issue.isFinalized ? (
+                  <p className="text-sm text-muted-foreground">Esta issue foi finalizada pelo responsável.</p>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => handleClaimIssue(issue.id)}
+                    disabled={!collaboratorEmail.trim() || claimingIssueId === issue.id}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {claimingIssueId === issue.id ? "Pegando..." : "Pegar esta issue"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

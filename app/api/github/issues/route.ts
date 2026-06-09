@@ -26,7 +26,6 @@ export async function GET(request: Request) {
     .from('project_issues')
     .select('*')
     .eq('idea_id', ideaId)
-    .neq('status', 'finalized')
     .order('status', { ascending: true })
     .order('issue_number', { ascending: true })
     .returns<ProjectIssueRecord[]>()
