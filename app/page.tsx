@@ -15,9 +15,6 @@ import {
   FileText,
   Search,
   Target,
-  Gem,
-  Package,
-  BarChart3,
   UsersRound,
   ClipboardList,
   Calculator,
@@ -147,14 +144,12 @@ const colabScoreData = [
 ]
 
 const toolkitSteps = [
-  { icon: Search, title: "Entender problema", action: "Abrir checklist" },
-  { icon: Target, title: "Validar público", action: "Ver template" },
-  { icon: Gem, title: "Proposta de valor", action: "Preencher canvas" },
-  { icon: Package, title: "Criar MVP", action: "Ver guia" },
-  { icon: BarChart3, title: "Medir evidências", action: "Abrir métricas" },
-  { icon: UsersRound, title: "Organizar squad", action: "Ver papéis" },
-  { icon: ClipboardList, title: "Registrar entregas", action: "Abrir tracker" },
-  { icon: Calculator, title: "Calcular recompensas", action: "Ver scorecard" },
+  { icon: Search, title: "Cadastrar ideia", description: "Registre o problema, público e proposta inicial.", action: "Abrir cadastro", href: "#cadastrar-ideia" },
+  { icon: Target, title: "Validar Negócio", description: "Antes de executar, revise soluções similares, concorrentes, substitutos e evidências de mercado.", action: "Abrir Validação de Negócio", href: "/validar-negocio" },
+  { icon: UsersRound, title: "Formar equipe", description: "Encontre colaboradores e organize papéis para executar.", action: "Colaborar", href: "#colaborar" },
+  { icon: ClipboardList, title: "Executar tarefas", description: "Transforme aprendizado em issues, branches e pull requests.", action: "Ver projetos", href: "/contribuir/projetos" },
+  { icon: Calculator, title: "Medir contribuição", description: "Revise entregas e pontue com ColabScore.", action: "Revisar tarefas", href: "/responsavel/revisar" },
+  { icon: Rocket, title: "Evoluir para MVP", description: "Use evidências e contribuição validada para avançar o produto.", action: "Ver guia", href: "#dashboard" },
 ]
 
 function Navbar() {
@@ -1206,16 +1201,31 @@ function ToolkitSection() {
                   <step.icon className="h-7 w-7 text-primary" />
                 </div>
                 <div className="text-xs font-bold text-accent mb-2">Etapa {index + 1}</div>
-                <h3 className="font-semibold text-foreground mb-4">{step.title}</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full border-border hover:bg-primary/10 hover:border-primary"
-                  onClick={handleClick}
-                >
-                  {step.action}
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
+                <h3 className="font-semibold text-foreground mb-2">{step.title}</h3>
+                <p className="mb-4 min-h-[48px] text-sm text-muted-foreground">{step.description}</p>
+                {step.href ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-border hover:bg-primary/10 hover:border-primary"
+                    asChild
+                  >
+                    <a href={step.href}>
+                      {step.action}
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </a>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-border hover:bg-primary/10 hover:border-primary"
+                    onClick={handleClick}
+                  >
+                    {step.action}
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

@@ -35,6 +35,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/github_issue_flow.sql` to add the GitHub issue contribution flow database layer.
    - `supabase/allow_multiple_collaborators_per_issue.sql` to allow multiple collaborators per issue and add explicit issue finalization.
    - `supabase/colabscore_configuration.sql` to add project and issue-level ColabScore settings.
+   - `supabase/business_validation_mvp.sql` to add the initial business validation MVP tables.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
 ## GitHub Webhook
@@ -74,6 +75,12 @@ Aceitar uma entrega pontua o colaborador, mas não fecha a issue automaticamente
 
 The home page dashboard reads real data from Supabase through `GET /api/dashboard`.
 It uses accepted assignments and `public.colab_points` as the source of truth for awarded points. If an accepted assignment does not yet have a `colab_points` row, the dashboard falls back to `issue_assignments.accepted_points`.
+
+## Validação de Negócio MVP
+
+`/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.
+
+This MVP does not yet execute real external web search. Future work can add Web Search API, GitHub Search API, Product Hunt, Google Patents, G2/Capterra, and app store search.
 
 ## API Endpoints
 
