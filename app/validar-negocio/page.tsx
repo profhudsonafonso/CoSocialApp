@@ -186,6 +186,38 @@ function isExternalEvidence(candidate: ValidationCandidate) {
   return ["github", "hacker_news", "wikipedia", "openalex", "web"].includes(candidate.source_type || "")
 }
 
+function calculateUiMarketThreat(candidate: ValidationCandidate) {
+  const sourceWeights: Record<string, number> = {
+    web: 1,
+    github: 0.9,
+    product_hunt: 1,
+    g2_capterra: 1,
+    hacker_news: 0.5,
+    wikipedia: 0.3,
+    openalex: 0.2,
+    local_fallback: 0,
+  }
+  const candidateTypeWeights: Record<string, number> = {
+    "Concorrente direto": 1,
+    "Concorrente indireto": 0.8,
+    Substituto: 0.7,
+    "Produto digital/SaaS": 0.8,
+    "Projeto open-source relacionado": 0.6,
+    "Sinal de demanda": 0.4,
+    "Referência de mercado": 0.3,
+    "Referência científica/técnica": 0.15,
+    "Hipótese local": 0,
+  }
+  const similarity = Number(candidate.similarity_score || 0)
+  const sourceWeight = sourceWeights[candidate.source_type || ""] ?? 0.3
+  const typeWeight = candidateTypeWeights[candidate.candidate_type || ""] ?? 0.4
+  const confidence = candidate.source_type === "local_fallback"
+    ? 0
+    : Math.max(0, Math.min(1, Number(candidate.source_confidence || sourceWeight)))
+
+  return Math.round(similarity * sourceWeight * typeWeight * confidence)
+}
+
 function groupCandidatesBySource(candidates: ValidationCandidate[]) {
   return candidates.reduce<Record<string, ValidationCandidate[]>>((groups, candidate) => {
     const sourceType = candidate.source_type || "unknown"
@@ -493,11 +525,14 @@ export default function ValidarNegocioPage() {
                     <p className="text-xs text-muted-foreground">Score de diferenciação</p>
                     <p className="mt-1 text-3xl font-semibold text-secondary">{formatScore(result.run.differentiation_score)}</p>
                   </div>
-                  <div className="rounded-md border border-border bg-background p-4">
-                    <p className="text-xs text-muted-foreground">Recomendação final</p>
-                    <p className="mt-2 text-lg font-semibold text-foreground">{result.run.overall_recommendation}</p>
-                  </div>
+                <div className="rounded-md border border-border bg-background p-4">
+                  <p className="text-xs text-muted-foreground">Recomendação final</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{result.run.overall_recommendation}</p>
                 </div>
+              </div>
+                <p className="text-sm text-muted-foreground">
+                  Score de novidade considera apenas evidências externas com força de concorrência. Referências acadêmicas ou genéricas ajudam no contexto, mas não reduzem fortemente a novidade.
+                </p>
                 <div className="rounded-md border border-border bg-background p-4">
                   <p className="text-sm font-medium text-foreground">Status das fontes</p>
                   <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
@@ -590,6 +625,8 @@ export default function ValidarNegocioPage() {
                           <th className="px-3 py-2 text-left text-sm text-muted-foreground">Tipo</th>
                           <th className="px-3 py-2 text-center text-sm text-muted-foreground">Fonte</th>
                           <th className="px-3 py-2 text-center text-sm text-muted-foreground">Similaridade</th>
+                          <th className="px-3 py-2 text-center text-sm text-muted-foreground">Confiança</th>
+                          <th className="px-3 py-2 text-center text-sm text-muted-foreground">Ameaça</th>
                           <th className="px-3 py-2 text-center text-sm text-muted-foreground">Risco</th>
                           <th className="px-3 py-2 text-left text-sm text-muted-foreground">Evidência/resumo</th>
                         </tr>
@@ -609,6 +646,9 @@ export default function ValidarNegocioPage() {
                                 <Badge variant={isExternalEvidence(candidate) ? "secondary" : "outline"}>
                                   {isExternalEvidence(candidate) ? "Evidência externa" : "Não é evidência externa"}
                                 </Badge>
+                                {candidate.source_type === "openalex" && (
+                                  <Badge variant="outline">Referência técnica/contextual — não é concorrente direto</Badge>
+                                )}
                               </div>
                               {!isExternalEvidence(candidate) && (
                                 <p className="mt-2 text-xs text-muted-foreground">
@@ -619,6 +659,8 @@ export default function ValidarNegocioPage() {
                             <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.candidate_type}</td>
                             <td className="px-3 py-3 text-center text-sm text-muted-foreground">{sourceLabel(candidate.source_type)}</td>
                             <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.similarity_score}</td>
+                            <td className="px-3 py-3 text-center text-sm text-muted-foreground">{Math.round(Number(candidate.source_confidence || 0) * 100)}%</td>
+                            <td className="px-3 py-3 text-center text-sm text-muted-foreground">{calculateUiMarketThreat(candidate)}</td>
                             <td className="px-3 py-3 text-center text-sm text-muted-foreground">{candidate.risk_level}</td>
                             <td className="px-3 py-3 text-sm text-muted-foreground">{candidate.evidence_summary}</td>
                           </tr>
@@ -644,7 +686,10 @@ export default function ValidarNegocioPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline">Não é evidência externa</Badge>
                         <Badge variant="outline">{candidate.candidate_type}</Badge>
+                        <Badge variant="outline">{sourceLabel(candidate.source_type)}</Badge>
                         <Badge variant="outline">Similaridade {candidate.similarity_score}</Badge>
+                        <Badge variant="outline">Confiança {Math.round(Number(candidate.source_confidence || 0) * 100)}%</Badge>
+                        <Badge variant="outline">Ameaça {calculateUiMarketThreat(candidate)}</Badge>
                       </div>
                       <h3 className="mt-3 font-semibold text-foreground">{candidate.name}</h3>
                       <p className="mt-1 text-sm text-muted-foreground">{candidate.description}</p>

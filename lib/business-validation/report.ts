@@ -2,6 +2,7 @@ import { type BusinessValidationQuery } from './search-connectors'
 import {
   type BusinessValidationCandidate,
   type BusinessValidationInput,
+  calculateMarketThreatScore,
   getOverallRecommendation,
 } from './scoring'
 
@@ -34,7 +35,7 @@ function listCandidates(candidates: BusinessValidationCandidate[]) {
   }
 
   return candidates.map((candidate) => (
-    `- **${candidate.name}** (${candidate.candidate_type}, ${candidate.source_type}): similaridade ${candidate.similarity_score}/100, risco ${candidate.risk_level}. ${candidate.evidence_summary}`
+    `- **${candidate.name}** (${candidate.candidate_type}, ${candidate.source_type}): similaridade ${candidate.similarity_score}/100, ameaça de mercado ${calculateMarketThreatScore(candidate)}/100, risco ${candidate.risk_level}. ${candidate.evidence_summary}`
   ))
 }
 
@@ -130,6 +131,9 @@ export function generateBusinessValidationMarkdown(
     '',
     '## Riscos de diferenciação',
     mainRisks,
+    '',
+    '## Limitações do score',
+    'Scores são heurísticos. Referências acadêmicas não são tratadas como concorrentes diretos. Posts com baixo engajamento são evidência fraca. Conclusões fortes de novidade ou risco exigem concorrentes diretos, substitutos ou alternativas de mercado com evidência externa clara.',
     '',
     '## Lacunas e oportunidades',
     mainOpportunities,
