@@ -38,6 +38,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/business_validation_mvp.sql` to add the initial business validation MVP tables.
    - `supabase/business_validation_sources_update.sql` to add source metadata for external validation evidence.
    - `supabase/business_validation_connector_status.sql` to store connector execution status for each validation run.
+   - `supabase/business_validation_investment_signals.sql` to store investment and fundraising evidence signals.
    - `supabase/colabai_assist_lite.sql` to add ColabAI Assist Lite credits, prompts, feature flags and usage logs.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
@@ -128,6 +129,18 @@ Queries are short search terms used to consult external sources. They are not re
 External evidence can come from GitHub, Hacker News, Wikipedia, OpenAlex, or Brave Search. Local fallback hypotheses are not external evidence and must be used only to guide manual investigation.
 
 Previous validation history is shown only as history, not as competitor evidence. The validation flow must not compare a project with itself or use previous runs from the same idea as market evidence.
+
+## Investment & Fundraising Signals
+
+The Business Validation module also has an investment and fundraising evidence layer. When `BRAVE_SEARCH_API_KEY` is configured, it searches public web results for similar startups or business models in investment platforms, equity crowdfunding platforms, angel networks, accelerators, VC sources, startup databases, market intelligence pages and fundraising-related public pages.
+
+Examples of targeted sources include Captable, EqSeed, SMU/StartMeUp, Kria, Wiztartup, Anjos do Brasil, Bossa Invest, ACE, WOW Aceleradora, Distrito, StartSe, Latitud, ABStartups, ABVCAP, CVM public sources, Sling Hub, Crunchbase, PitchBook, CB Insights, Dealroom and Tracxn.
+
+This layer matters for the innovation criterion because a similar startup appearing in public investment or fundraising sources is evidence that the model already has public market presence. It can reduce the novelty score when the similarity is meaningful.
+
+Important: an investment listing is a market validation signal, not a success guarantee. The app must not claim that a startup raised money unless that appears explicitly in the public search result or snippet.
+
+`BRAVE_SEARCH_API_KEY` is required for this layer. Without it, the UI shows the investment layer as not configured and no fallback investment signals are generated.
 
 ## API Endpoints
 

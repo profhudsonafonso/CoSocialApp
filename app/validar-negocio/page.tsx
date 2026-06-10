@@ -50,6 +50,7 @@ interface ValidationRun {
   candidates?: ValidationCandidate[]
   reports?: ValidationReport[]
   sourceStatuses?: SourceStatus[]
+  investmentSignals?: InvestmentSignal[]
 }
 
 interface ValidationQuery {
@@ -83,6 +84,8 @@ interface ValidationResult {
   queries: ValidationQuery[]
   candidates: ValidationCandidate[]
   reports: ValidationReport[]
+  investmentSignals?: InvestmentSignal[]
+  investmentSummary?: InvestmentSummary
   note: string
   sourcesUsed?: string[]
   sourceStatuses?: SourceStatus[]
@@ -95,6 +98,28 @@ interface SourceStatus {
   success: boolean
   result_count: number
   error_message: string | null
+}
+
+interface InvestmentSignal {
+  id?: string
+  source_platform: string | null
+  source_category: string | null
+  startup_name: string | null
+  source_url: string | null
+  title: string | null
+  snippet: string | null
+  similarity_score: number | null
+  investment_signal_score: number | null
+  innovation_penalty: number | null
+  source_confidence: number | null
+}
+
+interface InvestmentSummary {
+  sourcesConsulted: string[]
+  signalCount: number
+  highestInvestmentSignalScore: number
+  innovationPenaltyApplied: number
+  strongestSource: string | null
 }
 
 const defaultForm: ValidationForm = {
@@ -152,6 +177,7 @@ function sourceLabel(sourceType: string | null | undefined) {
     hacker_news: "Hacker News",
     wikipedia: "Wikipedia",
     openalex: "OpenAlex",
+    investment_signals: "Sinais de investimento",
     local_fallback: "Hipóteses locais para investigação",
   }
 
@@ -159,6 +185,10 @@ function sourceLabel(sourceType: string | null | undefined) {
 }
 
 function sourceStatusLabel(status: SourceStatus) {
+  if (status.source_type === "investment_signals" && !status.attempted) {
+    return "Não configurada"
+  }
+
   if (status.source_type === "local_fallback") {
     return "Hipóteses locais geradas"
   }
@@ -180,6 +210,10 @@ function sourceStatusLabel(status: SourceStatus) {
 
 function formatScore(value: number | null | undefined) {
   return value === null || value === undefined ? "insuficiente" : value
+}
+
+function formatNumber(value: number | null | undefined) {
+  return value === null || value === undefined ? 0 : value
 }
 
 function isExternalEvidence(candidate: ValidationCandidate) {
@@ -364,6 +398,7 @@ export default function ValidarNegocioPage() {
       reports: run.reports || [],
       sourcesUsed: Array.from(new Set((run.candidates || []).map((candidate) => candidate.source_type || "unknown"))),
       sourceStatuses: run.sourceStatuses || [],
+      investmentSignals: run.investmentSignals || [],
       note: "Este MVP usa fontes públicas e uma heurística simples de similaridade. A análise deve ser revisada pela equipe antes de decisões estratégicas.",
     })
   }
@@ -373,6 +408,15 @@ export default function ValidarNegocioPage() {
   const fallbackCandidates = groupedCandidates.local_fallback || []
   const externalCandidateGroups = Object.entries(groupedCandidates).filter(([sourceType]) => sourceType !== "local_fallback")
   const sourceStatuses = result?.sourceStatuses || []
+  const investmentSignals = result?.investmentSignals || []
+  const investmentStatus = sourceStatuses.find((status) => status.source_type === "investment_signals")
+  const investmentSummary = result?.investmentSummary || {
+    sourcesConsulted: Array.from(new Set(investmentSignals.map((signal) => signal.source_platform).filter(Boolean))) as string[],
+    signalCount: investmentSignals.length,
+    highestInvestmentSignalScore: Math.max(0, ...investmentSignals.map((signal) => Number(signal.investment_signal_score || 0))),
+    innovationPenaltyApplied: Math.min(35, Math.max(0, ...investmentSignals.map((signal) => Number(signal.innovation_penalty || 0)))),
+    strongestSource: investmentSignals[0]?.source_platform || null,
+  }
 
   return (
     <main className="min-h-screen bg-background py-12">
@@ -557,6 +601,105 @@ export default function ValidarNegocioPage() {
                     <p className="mt-2 text-sm text-muted-foreground">
                       Algumas fontes não retornaram dados ou falharam temporariamente.
                     </p>
+                  )}
+                </div>
+                <div className="rounded-md border border-border bg-background p-4">
+                  <div className="flex flex-col gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Sinais de investimento e captação</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Busca por startups e modelos semelhantes em plataformas de investimento, crowdfunding, aceleradoras, VCs e bases de startups.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">Sinal de mercado</Badge>
+                      <Badge variant="outline">Não prova sucesso</Badge>
+                      <Badge variant="outline">Reduz novidade se similar</Badge>
+                    </div>
+                  </div>
+
+                  {investmentStatus && !investmentStatus.attempted ? (
+                    <p className="mt-4 rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+                      Camada de investimento não configurada. Defina BRAVE_SEARCH_API_KEY para buscar sinais em plataformas de captação e bases de startups.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Fontes consultadas</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.sourcesConsulted.length}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Sinais encontrados</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.signalCount}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Maior sinal</p>
+                          <p className="mt-1 text-2xl font-semibold text-accent">{investmentSummary.highestInvestmentSignalScore}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Penalidade novidade</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.innovationPenaltyApplied}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Fonte mais forte</p>
+                          <p className="mt-2 text-sm font-semibold text-foreground">{investmentSummary.strongestSource || "Nenhuma"}</p>
+                        </div>
+                      </div>
+
+                      {investmentSignals.length === 0 ? (
+                        <p className="mt-4 rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+                          Nenhum sinal de investimento semelhante foi encontrado nas fontes públicas consultadas.
+                        </p>
+                      ) : (
+                        <div className="mt-4 overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-border">
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Startup / resultado</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Plataforma</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Categoria</th>
+                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Similaridade</th>
+                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Sinal de investimento</th>
+                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Penalidade</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Evidência pública</th>
+                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Link</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {investmentSignals.map((signal, index) => (
+                                <tr key={`${signal.source_url}-${index}`} className="border-b border-border/50">
+                                  <td className="px-3 py-3 text-sm text-foreground">
+                                    {signal.startup_name || signal.title || "Resultado público"}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm text-muted-foreground">{signal.source_platform || "Web pública"}</td>
+                                  <td className="px-3 py-3 text-sm text-muted-foreground">{signal.source_category || "startup_media"}</td>
+                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.similarity_score)}</td>
+                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.investment_signal_score)}</td>
+                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.innovation_penalty)}</td>
+                                  <td className="px-3 py-3 text-sm text-muted-foreground">
+                                    <p>{signal.snippet || "Resultado público encontrado via Brave Search."}</p>
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      Estar listado em fonte de investimento não prova sucesso; é apenas sinal de presença pública no mercado.
+                                    </p>
+                                  </td>
+                                  <td className="px-3 py-3 text-center text-sm">
+                                    {signal.source_url ? (
+                                      <a href={signal.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center text-primary hover:underline">
+                                        Abrir
+                                        <ExternalLink className="ml-1 h-3 w-3" />
+                                      </a>
+                                    ) : (
+                                      <span className="text-muted-foreground">Sem link</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </CardContent>

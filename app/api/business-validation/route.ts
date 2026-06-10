@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import {
+  type InvestmentSignal,
+  searchInvestmentSignalsWithBrave,
+} from '@/lib/business-validation/investment-signals'
 import { generateBusinessValidationMarkdown } from '@/lib/business-validation/report'
 import { runBusinessValidationSearches } from '@/lib/business-validation/search-connectors'
 import {
@@ -42,6 +46,19 @@ interface ConnectorStatusRecord extends ValidationChildRecord {
   error_message: string | null
 }
 
+interface InvestmentSignalRecord extends ValidationChildRecord {
+  source_platform: string | null
+  source_category: string | null
+  startup_name: string | null
+  source_url: string | null
+  title: string | null
+  snippet: string | null
+  similarity_score: number | null
+  investment_signal_score: number | null
+  innovation_penalty: number | null
+  source_confidence: number | null
+}
+
 interface IdeaRecord {
   id: string
   nome_projeto: string | null
@@ -70,7 +87,7 @@ async function loadValidationHistory(ideaId: string) {
     return []
   }
 
-  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult] = await Promise.all([
+  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult, investmentSignalsResult] = await Promise.all([
     supabaseAdmin
       .from('business_validation_queries')
       .select('*')
@@ -91,9 +108,20 @@ async function loadValidationHistory(ideaId: string) {
       .select('*')
       .in('validation_run_id', runIds)
       .returns<ConnectorStatusRecord[]>(),
+    supabaseAdmin
+      .from('business_validation_investment_signals')
+      .select('*')
+      .in('validation_run_id', runIds)
+      .returns<InvestmentSignalRecord[]>(),
   ])
 
-  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error, connectorStatusResult.error].find(Boolean)
+  const firstError = [
+    queriesResult.error,
+    candidatesResult.error,
+    reportsResult.error,
+    connectorStatusResult.error,
+    investmentSignalsResult.error,
+  ].find(Boolean)
 
   if (firstError) {
     throw new Error(firstError.message)
@@ -115,6 +143,7 @@ async function loadValidationHistory(ideaId: string) {
   const candidatesByRunId = groupByRunId(candidatesResult.data)
   const reportsByRunId = groupByRunId(reportsResult.data)
   const connectorStatusesByRunId = groupByRunId(connectorStatusResult.data)
+  const investmentSignalsByRunId = groupByRunId(investmentSignalsResult.data)
 
   return (runs || []).map((run) => ({
     ...run,
@@ -122,7 +151,51 @@ async function loadValidationHistory(ideaId: string) {
     candidates: candidatesByRunId.get(run.id) || [],
     reports: reportsByRunId.get(run.id) || [],
     sourceStatuses: connectorStatusesByRunId.get(run.id) || [],
+    investmentSignals: investmentSignalsByRunId.get(run.id) || [],
   }))
+}
+
+function applyInvestmentNoveltyPenalty(baseNoveltyScore: number | null, investmentSignals: InvestmentSignal[]) {
+  if (investmentSignals.length === 0) {
+    return baseNoveltyScore
+  }
+
+  const penalty = Math.min(35, Math.max(0, ...investmentSignals.map((signal) => signal.innovation_penalty || 0)))
+  const base = baseNoveltyScore ?? 80
+
+  return Math.max(0, Math.min(100, base - penalty))
+}
+
+function getRecommendationWithInvestmentSignals({
+  noveltyScore,
+  riskScore,
+  differentiationScore,
+  candidates,
+  investmentSignals,
+}: {
+  noveltyScore: number | null
+  riskScore: number | null
+  differentiationScore: number | null
+  candidates: Parameters<typeof getOverallRecommendation>[3]
+  investmentSignals: InvestmentSignal[]
+}) {
+  const baseRecommendation = getOverallRecommendation(noveltyScore, riskScore, differentiationScore, candidates)
+  const strongSignals = investmentSignals.filter((signal) => signal.investment_signal_score >= 70 && signal.similarity_score >= 55)
+  const weakDifferentiation = differentiationScore === null || differentiationScore < 55
+
+  if (strongSignals.length >= 2 && weakDifferentiation) {
+    return 'pivotar'
+  }
+
+  if (strongSignals.length >= 1 && weakDifferentiation) {
+    return 'nichar'
+  }
+
+  if (strongSignals.length >= 1) {
+    return 'ajustar'
+  }
+
+  return baseRecommendation
 }
 
 export async function GET(request: Request) {
@@ -224,23 +297,36 @@ export async function POST(request: Request) {
   }
 
   const searchResult = await runBusinessValidationSearches(searchInput)
-  const noveltyScore = calculateNoveltyScore(searchResult.candidates)
+  const investmentResult = await searchInvestmentSignalsWithBrave(searchInput)
+  const baseNoveltyScore = calculateNoveltyScore(searchResult.candidates)
+  const noveltyScore = applyInvestmentNoveltyPenalty(baseNoveltyScore, investmentResult.signals)
   const riskScore = calculateRiskScore(searchResult.candidates)
   const differentiationScore = calculateDifferentiationScore(searchInput, searchResult.candidates)
-  const overallRecommendation = getOverallRecommendation(noveltyScore, riskScore, differentiationScore, searchResult.candidates)
+  const overallRecommendation = getRecommendationWithInvestmentSignals({
+    noveltyScore,
+    riskScore,
+    differentiationScore,
+    candidates: searchResult.candidates,
+    investmentSignals: investmentResult.signals,
+  })
+  const allQueries = [...searchResult.queries, ...investmentResult.queries]
+  const allSourceStatuses = [...searchResult.sourceStatuses, investmentResult.status]
+  const allConnectorErrors = [...searchResult.connectorErrors, ...investmentResult.connectorErrors]
   const report = generateBusinessValidationMarkdown(
     searchInput,
-    searchResult.queries,
+    allQueries,
     searchResult.candidates,
     { noveltyScore, riskScore, differentiationScore },
-    searchResult.connectorErrors,
-    searchResult.sourceStatuses,
+    allConnectorErrors,
+    allSourceStatuses,
+    investmentResult.signals,
+    investmentResult.innovationPenaltyApplied,
   )
 
-  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult] = await Promise.all([
+  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult, investmentSignalsResult] = await Promise.all([
     supabaseAdmin
       .from('business_validation_queries')
-      .insert(searchResult.queries.map((query) => ({ ...query, validation_run_id: run.id })))
+      .insert(allQueries.map((query) => ({ ...query, validation_run_id: run.id })))
       .select('*'),
     supabaseAdmin
       .from('business_validation_candidates')
@@ -261,11 +347,23 @@ export async function POST(request: Request) {
       .select('*'),
     supabaseAdmin
       .from('business_validation_connector_status')
-      .insert(searchResult.sourceStatuses.map((status) => ({ ...status, validation_run_id: run.id })))
+      .insert(allSourceStatuses.map((status) => ({ ...status, validation_run_id: run.id })))
       .select('*'),
+    investmentResult.signals.length > 0
+      ? supabaseAdmin
+        .from('business_validation_investment_signals')
+        .insert(investmentResult.signals.map((signal) => ({ ...signal, validation_run_id: run.id })))
+        .select('*')
+      : Promise.resolve({ data: [], error: null }),
   ])
 
-  const firstError = [queriesResult.error, candidatesResult.error, reportsResult.error, connectorStatusResult.error].find(Boolean)
+  const firstError = [
+    queriesResult.error,
+    candidatesResult.error,
+    reportsResult.error,
+    connectorStatusResult.error,
+    investmentSignalsResult.error,
+  ].find(Boolean)
 
   if (firstError) {
     return NextResponse.json({ error: firstError.message }, { status: 500 })
@@ -296,8 +394,16 @@ export async function POST(request: Request) {
       candidates: candidatesResult.data || [],
       reports: reportsResult.data || [],
       sourcesUsed: searchResult.sourcesUsed,
+      investmentSignals: investmentSignalsResult.data || [],
+      investmentSummary: {
+        sourcesConsulted: investmentResult.sourcesConsulted,
+        signalCount: investmentResult.signals.length,
+        highestInvestmentSignalScore: Math.max(0, ...investmentResult.signals.map((signal) => signal.investment_signal_score)),
+        innovationPenaltyApplied: investmentResult.innovationPenaltyApplied,
+        strongestSource: investmentResult.signals[0]?.source_platform || null,
+      },
       sourceStatuses: connectorStatusResult.data || [],
-      connectorErrors: searchResult.connectorErrors,
+      connectorErrors: allConnectorErrors,
       skippedQueries: searchResult.skippedQueries,
       note: searchResult.usedFallback
         ? 'Nenhuma evidência externa real foi coletada nesta rodada. Foram geradas apenas hipóteses locais para investigação manual.'
