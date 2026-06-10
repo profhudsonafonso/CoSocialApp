@@ -38,6 +38,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/business_validation_mvp.sql` to add the initial business validation MVP tables.
    - `supabase/business_validation_sources_update.sql` to add source metadata for external validation evidence.
    - `supabase/business_validation_connector_status.sql` to store connector execution status for each validation run.
+   - `supabase/colabai_assist_lite.sql` to add ColabAI Assist Lite credits, prompts, feature flags and usage logs.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
 ## GitHub Webhook
@@ -79,6 +80,39 @@ Aceitar uma entrega pontua o colaborador, mas não fecha a issue automaticamente
 The home page dashboard reads real data from Supabase through `GET /api/dashboard`.
 It uses accepted assignments and `public.colab_points` as the source of truth for awarded points. If an accepted assignment does not yet have a `colab_points` row, the dashboard falls back to `issue_assignments.accepted_points`.
 
+## ColabAI Assist Lite
+
+`/colabai` is a minimal AI assistant for the GitHub contribution flow. It helps collaborators and project owners explain issues, generate technical plans, create implementation checklists, generate IDE prompt packs, review submissions, and validate whether a delivery matches the original issue.
+
+The MVP uses internal credits stored in Supabase. If an account does not exist for an email, the backend creates it with 20 monthly credits. Usage is logged in `public.ai_usage_events`; API keys are never exposed to the frontend.
+
+Run `supabase/colabai_assist_lite.sql` before using the feature.
+
+Optional environment variables:
+
+- `AI_PROVIDER=openrouter`
+- `OPENROUTER_API_KEY`
+- `REQUESTY_API_KEY`
+- `AI_DEFAULT_MODEL`
+- `AI_PREMIUM_MODEL`
+
+If no AI API key is configured, the backend uses the mock provider and returns a deterministic local demonstration response.
+
+To test locally:
+
+1. Run `npm run dev`.
+2. Open `/colabai`.
+3. Enter an email.
+4. Select a project and issue.
+5. Run `Explicar tarefa`.
+
+Security notes:
+
+- Never expose AI provider API keys in frontend code.
+- Never send raw webhook payloads to the AI provider.
+- The context builder masks values that look like tokens, secrets, passwords, API keys or `.env` content.
+- `ai_usage_events` stores only metadata, not raw prompts or raw webhook payloads.
+
 ## Validação de Negócio MVP
 
 `/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.
@@ -103,6 +137,8 @@ Previous validation history is shown only as history, not as competitor evidence
 - `GET /api/collaborators` — lista colaboradores cadastrados
 - `GET /api/dashboard` — consolida métricas reais do dashboard
 - `POST /api/github/webhook` — captura commits de push do GitHub
+- `GET /api/ai/credits` — mostra créditos e uso recente do ColabAI
+- `POST /api/ai/colabai-action` — executa uma ação do ColabAI no backend
 
 ## Learn More
 

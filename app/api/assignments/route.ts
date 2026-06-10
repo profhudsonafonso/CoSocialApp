@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       {
         data: {
           assignment_id: existingAssignment.id,
+          project_issue_id: issue.id,
           claim_key: existingAssignment.claim_key,
           branch_name: existingAssignment.branch_name,
           assignment_status: existingAssignment.status,
@@ -132,6 +133,7 @@ export async function POST(request: Request) {
     {
       data: {
         assignment_id: assignment.id,
+        project_issue_id: issue.id,
         claim_key: assignment.claim_key,
         branch_name: assignment.branch_name,
         assignment_status: assignment.status,

@@ -469,6 +469,13 @@ export default function ResponsavelRevisarPage() {
                     </div>
 
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant="outline" asChild>
+                        <a
+                          href={`/colabai?ideaId=${group.idea_id || ""}&issueId=${group.issue_id}&assignmentId=${assignment.assignment_id}&action=review_submission`}
+                        >
+                          Analisar com ColabAI
+                        </a>
+                      </Button>
                       <Button
                         type="button"
                         onClick={() => submitDecision(assignment, "accepted")}

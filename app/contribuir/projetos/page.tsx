@@ -45,6 +45,8 @@ interface ProjectIssue {
 }
 
 interface ClaimResult {
+  assignment_id: string
+  project_issue_id: string
   claim_key: string
   branch_name: string
   issue_number: number
@@ -388,6 +390,15 @@ export default function ContribuirProjetosPage() {
                 </div>
                 <div>
                   <p className="font-medium text-foreground">3. Push and open a Pull Request on GitHub.</p>
+                </div>
+                <div>
+                  <Button variant="outline" asChild>
+                    <a
+                      href={`/colabai?ideaId=${selectedIdeaId}&issueId=${claimResult.project_issue_id}&assignmentId=${claimResult.assignment_id}&action=issue_explain`}
+                    >
+                      Usar ColabAI nesta issue
+                    </a>
+                  </Button>
                 </div>
               </div>
             </CardContent>

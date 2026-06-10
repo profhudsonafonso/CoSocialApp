@@ -18,12 +18,14 @@ import {
   UsersRound,
   ClipboardList,
   Calculator,
+  BrainCircuit,
   ChevronRight,
   Menu,
   X
 } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -122,6 +124,7 @@ const navLinks = [
   { href: "#como-funciona", label: "Como Funciona" },
   { href: "#colabscore", label: "ColabScore" },
   { href: "#dashboard", label: "Dashboard" },
+  { href: "/colabai", label: "ColabAI" },
   { href: "#toolkit", label: "Toolkit" },
 ]
 
@@ -1235,6 +1238,42 @@ function ToolkitSection() {
   )
 }
 
+function ColabAiAssistSection() {
+  return (
+    <section className="bg-card/50 py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Card className="border-primary/30 bg-card">
+          <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="flex flex-col gap-3">
+              <Badge variant="outline" className="w-fit">
+                MVP experimental
+              </Badge>
+              <div>
+                <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground md:text-3xl">
+                  <BrainCircuit className="h-7 w-7 text-primary" />
+                  ColabAI Assist
+                </h2>
+                <p className="mt-2 max-w-3xl text-muted-foreground">
+                  Use IA para entender tarefas, gerar planos técnicos, criar prompts para IDE e revisar entregas.
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  MVP experimental com créditos internos. Não compartilha contas premium; usa API no backend.
+                </p>
+              </div>
+            </div>
+            <Button className="bg-primary hover:bg-primary/90" asChild>
+              <a href="/colabai">
+                Abrir ColabAI Assist
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
+
 function CTASection() {
   return (
     <section className="py-24 relative overflow-hidden">
@@ -1309,6 +1348,7 @@ export default function ColabSocialPage() {
       <DatabasePreviewSection />
       <ColabScoreSection />
       <DashboardSection />
+      <ColabAiAssistSection />
       <ToolkitSection />
       <CTASection />
       <Footer />
