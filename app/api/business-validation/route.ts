@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import {
   type InvestmentSignal,
-  searchInvestmentSignalsWithBrave,
+  searchInvestmentSignals,
 } from '@/lib/business-validation/investment-signals'
+import { MAX_INVESTMENT_QUERIES_PER_RUN } from '@/lib/business-validation/business-validation-config'
 import { generateBusinessValidationMarkdown } from '@/lib/business-validation/report'
 import { runBusinessValidationSearches } from '@/lib/business-validation/search-connectors'
 import {
@@ -57,6 +58,7 @@ interface InvestmentSignalRecord extends ValidationChildRecord {
   investment_signal_score: number | null
   innovation_penalty: number | null
   source_confidence: number | null
+  provider: string | null
 }
 
 interface IdeaRecord {
@@ -67,6 +69,89 @@ interface IdeaRecord {
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function logDev(label: string, payload: unknown) {
+  if (process.env.NODE_ENV !== 'development') {
+    return
+  }
+
+  console.error(`[business-validation] ${label}`, payload)
+}
+
+function asErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Erro desconhecido.'
+}
+
+function finiteNumber(value: unknown, fallback = 0) {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : fallback
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback = 0) {
+  return Math.max(min, Math.min(max, finiteNumber(value, fallback)))
+}
+
+function safeJson(value: unknown) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? null))
+  } catch {
+    return null
+  }
+}
+
+function sanitizeInvestmentSignalForInsert(signal: InvestmentSignal, validationRunId: string) {
+  return {
+    ...signal,
+    validation_run_id: validationRunId,
+    source_url: typeof signal.source_url === 'string' ? signal.source_url : null,
+    similarity_score: clampNumber(signal.similarity_score, 0, 100),
+    investment_signal_score: clampNumber(signal.investment_signal_score, 0, 100),
+    innovation_penalty: clampNumber(signal.innovation_penalty, 0, 35),
+    source_confidence: clampNumber(signal.source_confidence, 0, 1, 0.5),
+    raw_payload: safeJson(signal.raw_payload),
+  }
+}
+
+function summarizeInvestmentSignals(signals: InvestmentSignal[]) {
+  const strongCount = signals.filter((signal) => signal.relevance_level === 'forte').length
+  const mediumCount = signals.filter((signal) => signal.relevance_level === 'médio').length
+  const weakCount = signals.filter((signal) => ['fraco', 'irrelevante'].includes(signal.relevance_level)).length
+  const domainsFound = Array.from(new Set(signals.map((signal) => signal.domain).filter(Boolean)))
+  const platformsFound = Array.from(new Set(signals
+    .filter((signal) => signal.source_platform && signal.source_platform !== signal.domain)
+    .map((signal) => signal.source_platform)))
+
+  return {
+    strongCount,
+    mediumCount,
+    weakCount,
+    domainsFound,
+    platformsFound,
+  }
+}
+
+async function safeInsertMany<T>(
+  label: string,
+  action: () => PromiseLike<{ data: T[] | null, error: { message: string } | null }>,
+  warnings: string[],
+) {
+  try {
+    const result = await action()
+
+    if (result.error) {
+      logDev(`${label} insert failed`, result.error)
+      warnings.push(`${label}: ${result.error.message}`)
+      return []
+    }
+
+    return result.data || []
+  } catch (error) {
+    const message = asErrorMessage(error)
+    logDev(`${label} insert threw`, error)
+    warnings.push(`${label}: ${message}`)
+    return []
+  }
 }
 
 async function loadValidationHistory(ideaId: string) {
@@ -296,77 +381,170 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: runError?.message || 'Erro ao salvar validação.' }, { status: 500 })
   }
 
-  const searchResult = await runBusinessValidationSearches(searchInput)
-  const investmentResult = await searchInvestmentSignalsWithBrave(searchInput)
-  const baseNoveltyScore = calculateNoveltyScore(searchResult.candidates)
-  const noveltyScore = applyInvestmentNoveltyPenalty(baseNoveltyScore, investmentResult.signals)
-  const riskScore = calculateRiskScore(searchResult.candidates)
-  const differentiationScore = calculateDifferentiationScore(searchInput, searchResult.candidates)
-  const overallRecommendation = getRecommendationWithInvestmentSignals({
-    noveltyScore,
-    riskScore,
-    differentiationScore,
-    candidates: searchResult.candidates,
-    investmentSignals: investmentResult.signals,
-  })
+  const warnings: string[] = []
+  let searchResult: Awaited<ReturnType<typeof runBusinessValidationSearches>>
+
+  try {
+    searchResult = await runBusinessValidationSearches(searchInput)
+  } catch (error) {
+    const message = asErrorMessage(error)
+    warnings.push(`Busca externa geral falhou: ${message}`)
+    logDev('general search failed', error)
+    searchResult = {
+      queries: [],
+      candidates: [],
+      connectorErrors: [message],
+      sourceStatuses: [
+        {
+          source_type: 'external_search',
+          attempted: true,
+          success: false,
+          result_count: 0,
+          error_message: message,
+        },
+      ],
+      skippedQueries: [],
+      sourcesUsed: [],
+      usedFallback: false,
+      realExternalCandidateCount: 0,
+    }
+  }
+
+  let investmentResult: Awaited<ReturnType<typeof searchInvestmentSignals>>
+
+  try {
+    investmentResult = await searchInvestmentSignals(searchInput)
+  } catch (error) {
+    const message = asErrorMessage(error)
+    warnings.push(`Camada de investimento falhou: ${message}`)
+    logDev('investment search failed', error)
+    investmentResult = {
+      queries: [],
+      signals: [],
+      status: {
+        source_type: 'investment_signals',
+        attempted: true,
+        success: false,
+        result_count: 0,
+        error_message: message,
+      },
+      connectorErrors: [message],
+      innovationPenaltyApplied: 0,
+      sourcesConsulted: [],
+      configuredProvider: 'not_configured',
+      queriesGenerated: 0,
+      queriesExecuted: 0,
+      rawResultsBeforeDedup: 0,
+      resultsAfterDedup: 0,
+      requestBudgetUsed: `0/${MAX_INVESTMENT_QUERIES_PER_RUN}`,
+    }
+  }
+
+  let baseNoveltyScore: number | null = null
+  let noveltyScore: number | null = null
+  let riskScore: number | null = null
+  let differentiationScore: number | null = null
+  let overallRecommendation = 'validar mais'
+
+  try {
+    baseNoveltyScore = calculateNoveltyScore(searchResult.candidates)
+    noveltyScore = applyInvestmentNoveltyPenalty(baseNoveltyScore, investmentResult.signals)
+    riskScore = calculateRiskScore(searchResult.candidates)
+    differentiationScore = calculateDifferentiationScore(searchInput, searchResult.candidates)
+    overallRecommendation = getRecommendationWithInvestmentSignals({
+      noveltyScore,
+      riskScore,
+      differentiationScore,
+      candidates: searchResult.candidates,
+      investmentSignals: investmentResult.signals,
+    })
+  } catch (error) {
+    const message = asErrorMessage(error)
+    warnings.push(`Cálculo de scores falhou: ${message}`)
+    logDev('score calculation failed', error)
+  }
+
   const allQueries = [...searchResult.queries, ...investmentResult.queries]
   const allSourceStatuses = [...searchResult.sourceStatuses, investmentResult.status]
   const allConnectorErrors = [...searchResult.connectorErrors, ...investmentResult.connectorErrors]
-  const report = generateBusinessValidationMarkdown(
-    searchInput,
-    allQueries,
-    searchResult.candidates,
-    { noveltyScore, riskScore, differentiationScore },
-    allConnectorErrors,
-    allSourceStatuses,
-    investmentResult.signals,
-    investmentResult.innovationPenaltyApplied,
-  )
+  const investmentSignalSummary = summarizeInvestmentSignals(investmentResult.signals)
 
-  const [queriesResult, candidatesResult, reportsResult, connectorStatusResult, investmentSignalsResult] = await Promise.all([
-    supabaseAdmin
+  let report: ReturnType<typeof generateBusinessValidationMarkdown>
+
+  try {
+    report = generateBusinessValidationMarkdown(
+      searchInput,
+      allQueries,
+      searchResult.candidates,
+      { noveltyScore, riskScore, differentiationScore },
+      allConnectorErrors,
+      allSourceStatuses,
+      investmentResult.signals,
+      investmentResult.innovationPenaltyApplied,
+    )
+  } catch (error) {
+    const message = asErrorMessage(error)
+    warnings.push(`Relatório markdown falhou: ${message}`)
+    logDev('report generation failed', error)
+    report = {
+      markdownReport: `# Validação de Negócio MVP\n\nA validação foi concluída parcialmente, mas o relatório detalhado falhou: ${message}`,
+      executiveSummary: 'Validação concluída parcialmente.',
+      mainRisks: 'Revise os dados manualmente.',
+      mainOpportunities: 'Execute uma nova validação após estabilizar as fontes externas.',
+      recommendation: 'Recomendação final: validar mais.',
+      overallRecommendation: 'validar mais',
+    }
+  }
+
+  const queriesData = allQueries.length > 0
+    ? await safeInsertMany('business_validation_queries', () => supabaseAdmin
       .from('business_validation_queries')
       .insert(allQueries.map((query) => ({ ...query, validation_run_id: run.id })))
-      .select('*'),
-    supabaseAdmin
+      .select('*'), warnings)
+    : []
+  const candidatesData = searchResult.candidates.length > 0
+    ? await safeInsertMany('business_validation_candidates', () => supabaseAdmin
       .from('business_validation_candidates')
       .insert(searchResult.candidates.map((candidate) => ({ ...candidate, validation_run_id: run.id })))
-      .select('*'),
-    supabaseAdmin
-      .from('business_validation_reports')
-      .insert([
-        {
-          validation_run_id: run.id,
-          markdown_report: report.markdownReport,
-          executive_summary: report.executiveSummary,
-          main_risks: report.mainRisks,
-          main_opportunities: report.mainOpportunities,
-          recommendation: report.recommendation,
-        },
-      ])
-      .select('*'),
-    supabaseAdmin
+      .select('*'), warnings)
+    : []
+  const reportsData = await safeInsertMany('business_validation_reports', () => supabaseAdmin
+    .from('business_validation_reports')
+    .insert([
+      {
+        validation_run_id: run.id,
+        markdown_report: report.markdownReport,
+        executive_summary: report.executiveSummary,
+        main_risks: report.mainRisks,
+        main_opportunities: report.mainOpportunities,
+        recommendation: report.recommendation,
+      },
+    ])
+    .select('*'), warnings)
+  const connectorStatusData = allSourceStatuses.length > 0
+    ? await safeInsertMany('business_validation_connector_status', () => supabaseAdmin
       .from('business_validation_connector_status')
       .insert(allSourceStatuses.map((status) => ({ ...status, validation_run_id: run.id })))
-      .select('*'),
-    investmentResult.signals.length > 0
-      ? supabaseAdmin
-        .from('business_validation_investment_signals')
-        .insert(investmentResult.signals.map((signal) => ({ ...signal, validation_run_id: run.id })))
-        .select('*')
-      : Promise.resolve({ data: [], error: null }),
-  ])
+      .select('*'), warnings)
+    : []
+  const investmentSignalsData = []
 
-  const firstError = [
-    queriesResult.error,
-    candidatesResult.error,
-    reportsResult.error,
-    connectorStatusResult.error,
-    investmentSignalsResult.error,
-  ].find(Boolean)
+  for (const signal of investmentResult.signals) {
+    const row = sanitizeInvestmentSignalForInsert(signal, run.id)
+    const insertedRows = await safeInsertMany('business_validation_investment_signals', () => supabaseAdmin
+      .from('business_validation_investment_signals')
+      .insert([row])
+      .select('*'), warnings)
 
-  if (firstError) {
-    return NextResponse.json({ error: firstError.message }, { status: 500 })
+    if (insertedRows.length > 0) {
+      investmentSignalsData.push(...insertedRows)
+    } else {
+      logDev('investment signal row failed', row)
+    }
+  }
+
+  if (investmentResult.signals.length > 0 && investmentSignalsData.length < investmentResult.signals.length) {
+    warnings.push('Some investment signals could not be saved.')
   }
 
   const { data: completedRun, error: updateError } = await supabaseAdmin
@@ -390,21 +568,39 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       run: completedRun,
-      queries: queriesResult.data || [],
-      candidates: candidatesResult.data || [],
-      reports: reportsResult.data || [],
+      queries: queriesData,
+      candidates: candidatesData,
+      reports: reportsData,
       sourcesUsed: searchResult.sourcesUsed,
-      investmentSignals: investmentSignalsResult.data || [],
+      investmentSignals: investmentSignalsData,
       investmentSummary: {
         sourcesConsulted: investmentResult.sourcesConsulted,
         signalCount: investmentResult.signals.length,
         highestInvestmentSignalScore: Math.max(0, ...investmentResult.signals.map((signal) => signal.investment_signal_score)),
         innovationPenaltyApplied: investmentResult.innovationPenaltyApplied,
         strongestSource: investmentResult.signals[0]?.source_platform || null,
+        webSearchProvider: investmentResult.configuredProvider,
+        queriesExecuted: investmentResult.queriesExecuted,
+        maxQueries: MAX_INVESTMENT_QUERIES_PER_RUN,
+        resultsCollected: investmentResult.rawResultsBeforeDedup,
+        requestBudgetUsed: investmentResult.requestBudgetUsed,
+        ...investmentSignalSummary,
       },
-      sourceStatuses: connectorStatusResult.data || [],
+      sourceStatuses: connectorStatusData.length > 0 ? connectorStatusData : allSourceStatuses,
       connectorErrors: allConnectorErrors,
       skippedQueries: searchResult.skippedQueries,
+      warnings,
+      diagnostics: process.env.NODE_ENV === 'development'
+        ? {
+          investmentQueriesGenerated: investmentResult.queriesGenerated,
+          investmentQueriesExecuted: investmentResult.queriesExecuted,
+          tavilyRequestsUsed: investmentResult.configuredProvider === 'tavily' ? investmentResult.queriesExecuted : 0,
+          investmentResultsBeforeDedup: investmentResult.rawResultsBeforeDedup,
+          investmentResultsAfterDedup: investmentResult.resultsAfterDedup,
+          savedInvestmentSignals: investmentSignalsData.length,
+          warnings,
+        }
+        : undefined,
       note: searchResult.usedFallback
         ? 'Nenhuma evidência externa real foi coletada nesta rodada. Foram geradas apenas hipóteses locais para investigação manual.'
         : 'Este MVP usa fontes públicas e uma heurística simples de similaridade. A análise deve ser revisada pela equipe antes de decisões estratégicas.',

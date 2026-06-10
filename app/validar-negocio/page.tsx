@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import { ExternalLink, Search } from "lucide-react"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { Badge } from "@/components/ui/badge"
@@ -90,6 +90,7 @@ interface ValidationResult {
   sourcesUsed?: string[]
   sourceStatuses?: SourceStatus[]
   connectorErrors?: string[]
+  warnings?: string[]
 }
 
 interface SourceStatus {
@@ -112,6 +113,21 @@ interface InvestmentSignal {
   investment_signal_score: number | null
   innovation_penalty: number | null
   source_confidence: number | null
+  provider?: string | null
+  display_name?: string | null
+  domain?: string | null
+  result_kind?: string | null
+  relevance_level?: string | null
+  evidence_strength?: string | null
+  is_actual_investment_signal?: boolean | null
+  is_specific_startup_or_product?: boolean | null
+  matched_problem?: string[] | null
+  matched_audience?: string[] | null
+  matched_solution?: string[] | null
+  matched_business_model?: string[] | null
+  matched_differentiators?: string[] | null
+  similarity_reason?: string | null
+  novelty_impact_reason?: string | null
 }
 
 interface InvestmentSummary {
@@ -120,6 +136,16 @@ interface InvestmentSummary {
   highestInvestmentSignalScore: number
   innovationPenaltyApplied: number
   strongestSource: string | null
+  webSearchProvider?: string | null
+  queriesExecuted?: number
+  maxQueries?: number
+  resultsCollected?: number
+  requestBudgetUsed?: string
+  strongCount?: number
+  mediumCount?: number
+  weakCount?: number
+  domainsFound?: string[]
+  platformsFound?: string[]
 }
 
 const defaultForm: ValidationForm = {
@@ -273,6 +299,7 @@ export default function ValidarNegocioPage() {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [expandedInvestmentRows, setExpandedInvestmentRows] = useState<Record<string, boolean>>({})
 
   const ownerIdeas = useMemo(() => {
     const normalizedEmail = ownerEmail.trim().toLowerCase()
@@ -416,6 +443,33 @@ export default function ValidarNegocioPage() {
     highestInvestmentSignalScore: Math.max(0, ...investmentSignals.map((signal) => Number(signal.investment_signal_score || 0))),
     innovationPenaltyApplied: Math.min(35, Math.max(0, ...investmentSignals.map((signal) => Number(signal.innovation_penalty || 0)))),
     strongestSource: investmentSignals[0]?.source_platform || null,
+    webSearchProvider: investmentSignals[0]?.provider || (investmentStatus?.attempted ? "configurado" : "not_configured"),
+    queriesExecuted: investmentStatus?.attempted ? 0 : undefined,
+    maxQueries: undefined,
+    resultsCollected: investmentStatus?.result_count || 0,
+    requestBudgetUsed: undefined,
+    strongCount: investmentSignals.filter((signal) => signal.relevance_level === "forte").length,
+    mediumCount: investmentSignals.filter((signal) => signal.relevance_level === "médio").length,
+    weakCount: investmentSignals.filter((signal) => !["forte", "médio"].includes(signal.relevance_level || "")).length,
+    domainsFound: Array.from(new Set(investmentSignals.map((signal) => signal.domain).filter(Boolean))) as string[],
+    platformsFound: Array.from(new Set(investmentSignals.map((signal) => signal.source_platform).filter(Boolean))) as string[],
+  }
+  const investmentProviderLabel = investmentSummary.webSearchProvider === "tavily"
+    ? "Tavily"
+    : investmentSummary.webSearchProvider === "google_custom_search"
+    ? "Google Custom Search"
+    : investmentSummary.webSearchProvider === "serpapi"
+    ? "SerpAPI"
+    : investmentSummary.webSearchProvider === "brave"
+    ? "Brave Search"
+    : "Não configurado"
+  const hasMeaningfulInvestmentSignals = (investmentSummary.strongCount || 0) + (investmentSummary.mediumCount || 0) > 0
+
+  const toggleInvestmentRow = (key: string) => {
+    setExpandedInvestmentRows((currentRows) => ({
+      ...currentRows,
+      [key]: !currentRows[key],
+    }))
   }
 
   return (
@@ -610,6 +664,14 @@ export default function ValidarNegocioPage() {
                       <p className="mt-1 text-sm text-muted-foreground">
                         Busca por startups e modelos semelhantes em plataformas de investimento, crowdfunding, aceleradoras, VCs e bases de startups.
                       </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Provider de busca web: {investmentProviderLabel}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {investmentSummary.requestBudgetUsed
+                          ? `${investmentSummary.requestBudgetUsed} buscas ${investmentProviderLabel} usadas nesta validação`
+                          : "Orçamento de busca não informado para este resultado."}
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Badge variant="outline">Sinal de mercado</Badge>
@@ -620,31 +682,54 @@ export default function ValidarNegocioPage() {
 
                   {investmentStatus && !investmentStatus.attempted ? (
                     <p className="mt-4 rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
-                      Camada de investimento não configurada. Defina BRAVE_SEARCH_API_KEY para buscar sinais em plataformas de captação e bases de startups.
+                      Busca web não configurada. Configure TAVILY_API_KEY, GOOGLE_CUSTOM_SEARCH_API_KEY + GOOGLE_CUSTOM_SEARCH_ENGINE_ID, SERPAPI_KEY ou BRAVE_SEARCH_API_KEY.
                     </p>
                   ) : (
                     <>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded-md border border-border bg-card p-3">
-                          <p className="text-xs text-muted-foreground">Fontes consultadas</p>
-                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.sourcesConsulted.length}</p>
+                          <p className="text-xs text-muted-foreground">Provider</p>
+                          <p className="mt-1 text-lg font-semibold text-foreground">{investmentProviderLabel}</p>
                         </div>
                         <div className="rounded-md border border-border bg-card p-3">
-                          <p className="text-xs text-muted-foreground">Sinais encontrados</p>
-                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.signalCount}</p>
+                          <p className="text-xs text-muted-foreground">Buscas usadas</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.requestBudgetUsed || "0/0"}</p>
                         </div>
                         <div className="rounded-md border border-border bg-card p-3">
-                          <p className="text-xs text-muted-foreground">Maior sinal</p>
-                          <p className="mt-1 text-2xl font-semibold text-accent">{investmentSummary.highestInvestmentSignalScore}</p>
+                          <p className="text-xs text-muted-foreground">Resultados coletados</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.resultsCollected || 0}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Sinais fortes</p>
+                          <p className="mt-1 text-2xl font-semibold text-accent">{investmentSummary.strongCount || 0}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Sinais médios</p>
+                          <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.mediumCount || 0}</p>
+                        </div>
+                        <div className="rounded-md border border-border bg-card p-3">
+                          <p className="text-xs text-muted-foreground">Referências fracas</p>
+                          <p className="mt-1 text-2xl font-semibold text-muted-foreground">{investmentSummary.weakCount || 0}</p>
                         </div>
                         <div className="rounded-md border border-border bg-card p-3">
                           <p className="text-xs text-muted-foreground">Penalidade novidade</p>
                           <p className="mt-1 text-2xl font-semibold text-foreground">{investmentSummary.innovationPenaltyApplied}</p>
                         </div>
                         <div className="rounded-md border border-border bg-card p-3">
-                          <p className="text-xs text-muted-foreground">Fonte mais forte</p>
-                          <p className="mt-2 text-sm font-semibold text-foreground">{investmentSummary.strongestSource || "Nenhuma"}</p>
+                          <p className="text-xs text-muted-foreground">Plataformas reconhecidas</p>
+                          <p className="mt-2 text-sm font-semibold text-foreground">
+                            {(investmentSummary.platformsFound || []).slice(0, 3).join(", ") || "Nenhuma"}
+                          </p>
                         </div>
+                      </div>
+
+                      <div className="mt-3 rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
+                        <p>Domínios encontrados: {(investmentSummary.domainsFound || []).slice(0, 6).join(", ") || "nenhum"}.</p>
+                        {!hasMeaningfulInvestmentSignals && investmentSignals.length > 0 && (
+                          <p className="mt-2">
+                            Não foram encontrados sinais fortes de investimento/captação para soluções altamente similares. Foram encontradas apenas referências genéricas de mercado.
+                          </p>
+                        )}
                       </div>
 
                       {investmentSignals.length === 0 ? (
@@ -653,48 +738,108 @@ export default function ValidarNegocioPage() {
                         </p>
                       ) : (
                         <div className="mt-4 overflow-x-auto">
+                          <h3 className="mb-3 font-semibold text-foreground">Resultados encontrados e por que são parecidos</h3>
                           <table className="w-full">
                             <thead>
                               <tr className="border-b border-border">
-                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Startup / resultado</th>
-                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Plataforma</th>
-                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Categoria</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Resultado</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Fonte/plataforma</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Tipo</th>
+                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Relevância</th>
                                 <th className="px-3 py-2 text-center text-sm text-muted-foreground">Similaridade</th>
                                 <th className="px-3 py-2 text-center text-sm text-muted-foreground">Sinal de investimento</th>
-                                <th className="px-3 py-2 text-center text-sm text-muted-foreground">Penalidade</th>
-                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Evidência pública</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Impacto na novidade</th>
+                                <th className="px-3 py-2 text-left text-sm text-muted-foreground">Por que é parecido?</th>
                                 <th className="px-3 py-2 text-center text-sm text-muted-foreground">Link</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {investmentSignals.map((signal, index) => (
-                                <tr key={`${signal.source_url}-${index}`} className="border-b border-border/50">
-                                  <td className="px-3 py-3 text-sm text-foreground">
-                                    {signal.startup_name || signal.title || "Resultado público"}
-                                  </td>
-                                  <td className="px-3 py-3 text-sm text-muted-foreground">{signal.source_platform || "Web pública"}</td>
-                                  <td className="px-3 py-3 text-sm text-muted-foreground">{signal.source_category || "startup_media"}</td>
-                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.similarity_score)}</td>
-                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.investment_signal_score)}</td>
-                                  <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.innovation_penalty)}</td>
-                                  <td className="px-3 py-3 text-sm text-muted-foreground">
-                                    <p>{signal.snippet || "Resultado público encontrado via Brave Search."}</p>
-                                    <p className="mt-2 text-xs text-muted-foreground">
-                                      Estar listado em fonte de investimento não prova sucesso; é apenas sinal de presença pública no mercado.
-                                    </p>
-                                  </td>
-                                  <td className="px-3 py-3 text-center text-sm">
-                                    {signal.source_url ? (
-                                      <a href={signal.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center text-primary hover:underline">
-                                        Abrir
-                                        <ExternalLink className="ml-1 h-3 w-3" />
-                                      </a>
-                                    ) : (
-                                      <span className="text-muted-foreground">Sem link</span>
+                              {investmentSignals.map((signal, index) => {
+                                const rowKey = signal.id || `${signal.source_url}-${index}`
+                                const matchedGroups = [
+                                  ["Problema", signal.matched_problem],
+                                  ["Público", signal.matched_audience],
+                                  ["Solução", signal.matched_solution],
+                                  ["Modelo", signal.matched_business_model],
+                                  ["Diferenciais", signal.matched_differentiators],
+                                ]
+
+                                return (
+                                  <Fragment key={rowKey}>
+                                    <tr className="border-b border-border/50 align-top">
+                                      <td className="px-3 py-3 text-sm text-foreground">
+                                        <p className="font-medium">{signal.display_name || signal.startup_name || signal.title || "Resultado público"}</p>
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {signal.is_specific_startup_or_product && <Badge variant="secondary">Startup/produto específico</Badge>}
+                                          {signal.is_actual_investment_signal && <Badge variant="secondary">Sinal de investimento</Badge>}
+                                          {!signal.is_actual_investment_signal && <Badge variant="outline">Artigo/referência</Badge>}
+                                          {signal.relevance_level === "fraco" && <Badge variant="outline">Fraco</Badge>}
+                                          {formatNumber(signal.innovation_penalty) > 0 ? (
+                                            <Badge variant="outline">Reduz novidade</Badge>
+                                          ) : (
+                                            <Badge variant="outline">Não reduz novidade</Badge>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                                        {signal.source_platform || signal.domain || "Fonte pública"}
+                                        <p className="mt-1 text-xs">{signal.domain}</p>
+                                      </td>
+                                      <td className="px-3 py-3 text-sm text-muted-foreground">{signal.result_kind || signal.source_category || "generic_content"}</td>
+                                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">{signal.relevance_level || "fraco"}</td>
+                                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.similarity_score)}</td>
+                                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">{formatNumber(signal.investment_signal_score)}</td>
+                                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                                        {signal.novelty_impact_reason || (formatNumber(signal.innovation_penalty) > 0 ? "Reduz novidade." : "Não reduz novidade.")}
+                                      </td>
+                                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                                        <p>{signal.similarity_reason || "Referência genérica; não encontrou correspondência específica suficiente."}</p>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="mt-2"
+                                          onClick={() => toggleInvestmentRow(rowKey)}
+                                        >
+                                          {expandedInvestmentRows[rowKey] ? "Ocultar detalhes" : "Ver detalhes"}
+                                        </Button>
+                                      </td>
+                                      <td className="px-3 py-3 text-center text-sm">
+                                        {signal.source_url ? (
+                                          <a href={signal.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center text-primary hover:underline">
+                                            Abrir
+                                            <ExternalLink className="ml-1 h-3 w-3" />
+                                          </a>
+                                        ) : (
+                                          <span className="text-muted-foreground">Sem link</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                    {expandedInvestmentRows[rowKey] && (
+                                      <tr className="border-b border-border/50">
+                                        <td colSpan={9} className="px-3 py-3">
+                                          <div className="grid gap-3 rounded-md border border-border bg-card p-4 text-sm text-muted-foreground md:grid-cols-2">
+                                            {matchedGroups.map(([label, values]) => (
+                                              <div key={label as string}>
+                                                <p className="font-medium text-foreground">{label as string}</p>
+                                                <p>{Array.isArray(values) && values.length > 0 ? values.join(", ") : "Sem match específico"}</p>
+                                              </div>
+                                            ))}
+                                            <div className="md:col-span-2">
+                                              <p className="font-medium text-foreground">Evidência pública</p>
+                                              <p>{signal.snippet || "Sem snippet disponível."}</p>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                              <p className="font-medium text-foreground">Impacto na novidade</p>
+                                              <p>{signal.novelty_impact_reason || "Não reduz novidade."}</p>
+                                            </div>
+                                          </div>
+                                        </td>
+                                      </tr>
                                     )}
-                                  </td>
-                                </tr>
-                              ))}
+                                  </Fragment>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>

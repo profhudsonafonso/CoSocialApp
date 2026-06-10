@@ -1,4 +1,14 @@
 import {
+  type ConfiguredWebSearchProvider,
+  type NormalizedWebSearchResult,
+  getConfiguredWebSearchProvider,
+  runConfiguredWebSearch,
+} from './web-search-providers'
+import {
+  MAX_INVESTMENT_QUERIES_PER_RUN,
+  MAX_TOTAL_INVESTMENT_RESULTS,
+} from './business-validation-config'
+import {
   type BusinessValidationInput,
   calculateSimilarityScore,
   tokenize,
@@ -33,6 +43,21 @@ export interface InvestmentSignal {
   market_validation_signal: boolean
   innovation_penalty: number
   source_confidence: number
+  provider: string
+  display_name: string
+  domain: string
+  result_kind: string
+  relevance_level: 'forte' | 'médio' | 'fraco' | 'irrelevante'
+  evidence_strength: 'alta' | 'média' | 'baixa'
+  is_actual_investment_signal: boolean
+  is_specific_startup_or_product: boolean
+  matched_problem: string[]
+  matched_audience: string[]
+  matched_solution: string[]
+  matched_business_model: string[]
+  matched_differentiators: string[]
+  similarity_reason: string
+  novelty_impact_reason: string
   raw_payload: unknown
   collected_at: string
 }
@@ -55,13 +80,12 @@ export interface InvestmentSignalSearchResult {
   connectorErrors: string[]
   innovationPenaltyApplied: number
   sourcesConsulted: string[]
-}
-
-interface BraveResult {
-  title?: string
-  url?: string
-  description?: string
-  extra_snippets?: string[]
+  configuredProvider: ConfiguredWebSearchProvider
+  queriesGenerated: number
+  queriesExecuted: number
+  rawResultsBeforeDedup: number
+  resultsAfterDedup: number
+  requestBudgetUsed: string
 }
 
 const categoryWeights: Record<string, number> = {
@@ -72,9 +96,28 @@ const categoryWeights: Record<string, number> = {
   angel_network: 0.8,
   market_intelligence: 0.8,
   startup_media: 0.6,
+  startup_article: 0.35,
+  market_reference: 0.25,
   public_registry: 0.5,
   startup_ecosystem: 0.6,
+  unrelated_or_weak: 0.1,
 }
+
+const genericInvestmentWords = new Set([
+  'innovation', 'inovacao', 'inovação', 'startup', 'business', 'platform',
+  'software', 'solution', 'solucao', 'solução', 'idea', 'ideia', 'validation',
+  'validacao', 'validação', 'tecnologia', 'technology', 'negocio', 'negócio',
+  'projeto', 'project', 'market', 'mercado', 'ferramenta', 'ferramentas',
+])
+
+const meaningfulFocusTerms = new Set([
+  'collaboration', 'colaboracao', 'colaboração', 'cofounder', 'marketplace',
+  'contributor', 'colaborador', 'colaboradores', 'reward', 'rewards',
+  'recompensa', 'recompensas', 'task', 'tasks', 'tarefa', 'tarefas', 'mvp',
+  'github', 'colabscore', 'crowdfunding', 'accelerator', 'aceleradora',
+  'funding', 'investment', 'investimento', 'captacao', 'captação',
+  'portfolio', 'database', 'venture', 'angel', 'anjo',
+])
 
 function nowIso() {
   return new Date().toISOString()
@@ -179,41 +222,205 @@ export function generateInvestmentSignalQueries(input: BusinessValidationInput) 
     }))
 }
 
+function selectInvestmentQueriesForRun(
+  queries: ReturnType<typeof generateInvestmentSignalQueries>,
+  input: BusinessValidationInput,
+) {
+  const selected: typeof queries = []
+  const add = (query: (typeof queries)[number] | undefined) => {
+    if (!query || selected.some((item) => item.query_text === query.query_text)) {
+      return
+    }
+
+    selected.push(query)
+  }
+  const hasPortugueseContext = /brasil|latam|portugu|inova|valida|ideia|plataforma/i.test([
+    input.ideaName,
+    input.problem,
+    input.proposedSolution,
+    input.marketRegion,
+  ].join(' '))
+
+  add(queries.find((query) => (
+    !query.query_text.startsWith('site:') &&
+    /\bfunding\b|\binvestment\b/i.test(query.query_text) &&
+    !/[ãçáéíóú]/i.test(query.query_text)
+  )))
+  add(queries.find((query) => (
+    !query.query_text.startsWith('site:') &&
+    (hasPortugueseContext ? /investimento|captação|captacao/i.test(query.query_text) : /investment|funding/i.test(query.query_text))
+  )))
+  add(
+    queries.find((query) => /site:captable\.com\.br|site:eqseed\.com|site:crunchbase\.com|site:distrito\.me/i.test(query.query_text)) ||
+    queries.find((query) => query.query_text.startsWith('site:')),
+  )
+
+  for (const query of queries) {
+    add(query)
+
+    if (selected.length >= MAX_INVESTMENT_QUERIES_PER_RUN) {
+      break
+    }
+  }
+
+  return selected.slice(0, MAX_INVESTMENT_QUERIES_PER_RUN)
+}
+
 export function classifyInvestmentSource(url: string, title = '', snippet = '') {
   const haystack = `${url} ${title} ${snippet}`.toLowerCase()
+  const domain = extractDomain(url)
+  const kind = classifyResultKind(haystack)
 
-  if (haystack.includes('captable.com.br')) return { platform: 'Captable', category: 'equity_crowdfunding', confidence: 0.9 }
-  if (haystack.includes('eqseed.com')) return { platform: 'EqSeed', category: 'equity_crowdfunding', confidence: 0.9 }
-  if (haystack.includes('startmeup') || haystack.includes('smu.com.br')) return { platform: 'SMU / StartMeUp', category: 'equity_crowdfunding', confidence: 0.82 }
-  if (haystack.includes('kria.vc') || haystack.includes('kria.com.br')) return { platform: 'Kria', category: 'equity_crowdfunding', confidence: 0.88 }
-  if (haystack.includes('wiztartup.com')) return { platform: 'Wiztartup', category: 'equity_crowdfunding', confidence: 0.82 }
-  if (haystack.includes('anjosdobrasil.net')) return { platform: 'Anjos do Brasil', category: 'angel_network', confidence: 0.8 }
-  if (haystack.includes('bossainvest.com')) return { platform: 'Bossa Invest', category: 'venture_capital', confidence: 0.82 }
-  if (haystack.includes('acestartups.com.br') || haystack.includes('aceventures.com.br')) return { platform: 'ACE', category: 'accelerator', confidence: 0.8 }
-  if (haystack.includes('wow.ac')) return { platform: 'WOW Aceleradora', category: 'accelerator', confidence: 0.78 }
-  if (haystack.includes('distrito.me')) return { platform: 'Distrito', category: 'startup_database', confidence: 0.86 }
-  if (haystack.includes('startse.com')) return { platform: 'StartSe', category: 'startup_media', confidence: 0.7 }
-  if (haystack.includes('latitud.com')) return { platform: 'Latitud', category: 'accelerator', confidence: 0.78 }
-  if (haystack.includes('abstartups.com.br')) return { platform: 'ABStartups', category: 'startup_ecosystem', confidence: 0.7 }
-  if (haystack.includes('abvcap.com.br')) return { platform: 'ABVCAP', category: 'venture_capital', confidence: 0.72 }
-  if (haystack.includes('cvm.gov.br')) return { platform: 'CVM', category: 'public_registry', confidence: 0.7 }
-  if (haystack.includes('slinghub.io') || haystack.includes('slinghub.com')) return { platform: 'Sling Hub', category: 'startup_database', confidence: 0.82 }
-  if (haystack.includes('crunchbase.com')) return { platform: 'Crunchbase', category: 'startup_database', confidence: 0.88 }
-  if (haystack.includes('pitchbook.com')) return { platform: 'PitchBook', category: 'startup_database', confidence: 0.84 }
-  if (haystack.includes('cbinsights.com')) return { platform: 'CB Insights', category: 'market_intelligence', confidence: 0.82 }
-  if (haystack.includes('dealroom.co')) return { platform: 'Dealroom', category: 'startup_database', confidence: 0.86 }
-  if (haystack.includes('tracxn.com')) return { platform: 'Tracxn', category: 'startup_database', confidence: 0.84 }
+  if (haystack.includes('captable.com.br')) return { platform: 'Captable', category: 'equity_crowdfunding', resultKind: kind || 'fundraising_campaign', confidence: 0.9 }
+  if (haystack.includes('eqseed.com')) return { platform: 'EqSeed', category: 'equity_crowdfunding', resultKind: kind || 'fundraising_campaign', confidence: 0.9 }
+  if (haystack.includes('startmeup') || haystack.includes('smu.com.br')) return { platform: 'SMU / StartMeUp', category: 'equity_crowdfunding', resultKind: kind || 'fundraising_campaign', confidence: 0.82 }
+  if (haystack.includes('kria.vc') || haystack.includes('kria.com.br')) return { platform: 'Kria', category: 'equity_crowdfunding', resultKind: kind || 'fundraising_campaign', confidence: 0.88 }
+  if (haystack.includes('wiztartup.com')) return { platform: 'Wiztartup', category: 'equity_crowdfunding', resultKind: kind || 'fundraising_campaign', confidence: 0.82 }
+  if (haystack.includes('anjosdobrasil.net')) return { platform: 'Anjos do Brasil', category: 'angel_network', resultKind: kind || 'investor_page', confidence: 0.8 }
+  if (haystack.includes('bossainvest.com')) return { platform: 'Bossa Invest', category: 'venture_capital', resultKind: kind || 'investor_page', confidence: 0.82 }
+  if (haystack.includes('acestartups.com.br') || haystack.includes('aceventures.com.br')) return { platform: 'ACE Startups', category: 'accelerator', resultKind: kind || 'accelerator_portfolio', confidence: 0.8 }
+  if (haystack.includes('wow.ac')) return { platform: 'WOW Aceleradora', category: 'accelerator', resultKind: kind || 'accelerator_portfolio', confidence: 0.78 }
+  if (haystack.includes('distrito.me')) return { platform: 'Distrito', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.86 }
+  if (haystack.includes('startse.com')) return { platform: 'StartSe', category: 'startup_media', resultKind: kind || 'market_article', confidence: 0.7 }
+  if (haystack.includes('latitud.com')) return { platform: 'Latitud', category: 'accelerator', resultKind: kind || 'accelerator_portfolio', confidence: 0.78 }
+  if (haystack.includes('abstartups.com.br')) return { platform: 'ABStartups', category: 'startup_ecosystem', resultKind: kind || 'startup_database_entry', confidence: 0.7 }
+  if (haystack.includes('abvcap.com.br')) return { platform: 'ABVCAP', category: 'venture_capital', resultKind: kind || 'investor_page', confidence: 0.72 }
+  if (haystack.includes('cvm.gov.br')) return { platform: 'CVM', category: 'public_registry', resultKind: kind || 'generic_content', confidence: 0.7 }
+  if (haystack.includes('slinghub.io') || haystack.includes('slinghub.com')) return { platform: 'Sling Hub', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.82 }
+  if (haystack.includes('crunchbase.com')) return { platform: 'Crunchbase', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.88 }
+  if (haystack.includes('pitchbook.com')) return { platform: 'PitchBook', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.84 }
+  if (haystack.includes('cbinsights.com')) return { platform: 'CB Insights', category: 'market_intelligence', resultKind: kind || 'startup_database_entry', confidence: 0.82 }
+  if (haystack.includes('dealroom.co')) return { platform: 'Dealroom', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.86 }
+  if (haystack.includes('tracxn.com')) return { platform: 'Tracxn', category: 'startup_database', resultKind: kind || 'startup_database_entry', confidence: 0.84 }
 
-  return { platform: 'Web pública', category: 'startup_media', confidence: 0.5 }
+  return {
+    platform: domain || 'Tavily Web Result',
+    category: kind === 'tool_list_article' ? 'startup_article' : kind === 'generic_content' ? 'market_reference' : 'unrelated_or_weak',
+    resultKind: kind || 'generic_content',
+    confidence: 0.45,
+  }
+}
+
+function extractDomain(url: string | null | undefined) {
+  if (!url) return ''
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url.replace(/^https?:\/\//, '').split('/')[0]?.replace(/^www\./, '') || ''
+  }
+}
+
+function classifyResultKind(text: string) {
+  if (/\b(raised|raises|captou|levantou|funding round|rodada|series [abc]|pre-seed|seed round)\b/i.test(text)) return 'funding_round'
+  if (/\b(crowdfunding|equity crowdfunding|captação|captacao|oferta pública|investir a partir)\b/i.test(text)) return 'fundraising_campaign'
+  if (/\b(portfolio|portfólio|batch|acelerad[ao]|accelerator|startup selecionada)\b/i.test(text)) return 'accelerator_portfolio'
+  if (/\b(crunchbase|dealroom|tracxn|sling hub|startup database|company profile|perfil da startup)\b/i.test(text)) return 'startup_database_entry'
+  if (/\b(vc|venture capital|investor|investidora|anjos|angel|fundo de investimento)\b/i.test(text)) return 'investor_page'
+  if (/\b(top|melhores|lista|ferramentas|tools|alternativas|software para)\b/i.test(text)) return 'tool_list_article'
+  if (/\b(article|artigo|blog|guia|guide|como validar|how to validate)\b/i.test(text)) return 'market_article'
+  return 'generic_content'
+}
+
+export function extractCandidateIdentity(result: NormalizedWebSearchResult) {
+  const title = compact(result.title) || 'Untitled result'
+  const domain = extractDomain(result.url)
+  const snippet = compact(result.snippet)
+  const source = classifyInvestmentSource(result.url || '', title, snippet)
+  const titlePieces = title.split(/\s[-|–]\s|:/).map((piece) => piece.trim()).filter(Boolean)
+  const candidatePiece = titlePieces.find((piece) => (
+    piece.length >= 2 &&
+    piece.length <= 80 &&
+    !/^(top|melhores|lista|guia|como|how|what|por que|why)\b/i.test(piece)
+  ))
+  const displayName = candidatePiece || title.slice(0, 80)
+
+  return {
+    display_name: displayName,
+    domain,
+    source_platform: source.platform,
+    result_kind: source.resultKind,
+    short_summary: snippet.slice(0, 280),
+  }
 }
 
 function extractPattern(text: string, pattern: RegExp) {
   return text.match(pattern)?.[0] || null
 }
 
-export function extractInvestmentSignalFields(result: BraveResult) {
+function meaningfulInvestmentTokens(text: string) {
+  const baseTokens = tokenize(text).filter((token) => !genericInvestmentWords.has(token))
+  const phraseMatches = [
+    ['business validation', 'validação de negócios', 'validacao de negocios'],
+    ['idea validation', 'validação de ideias', 'validacao de ideias'],
+    ['open innovation', 'inovação aberta', 'inovacao aberta'],
+    ['task marketplace', 'marketplace de tarefas'],
+    ['startup collaboration', 'colaboração entre startups', 'colaboracao entre startups'],
+  ].flatMap((phrases) => (
+    phrases.some((phrase) => text.toLowerCase().includes(phrase))
+      ? [phrases[0].replace(/\s+/g, ' ')]
+      : []
+  ))
+
+  return Array.from(new Set([...baseTokens, ...phraseMatches].filter((token) => (
+    meaningfulFocusTerms.has(token) ||
+    token.includes('validation') ||
+    token.includes('validacao') ||
+    token.includes('validação') ||
+    token.length >= 5
+  ))))
+}
+
+function matchingTerms(sourceText: string, resultText: string) {
+  const result = resultText.toLowerCase()
+
+  return meaningfulInvestmentTokens(sourceText)
+    .filter((token) => result.includes(token.toLowerCase()))
+    .slice(0, 8)
+}
+
+export function explainInvestmentSimilarity(
+  signal: Pick<InvestmentSignal, 'title' | 'snippet' | 'result_kind' | 'source_category' | 'similarity_score' | 'is_actual_investment_signal' | 'is_specific_startup_or_product'>,
+  input: BusinessValidationInput,
+) {
+  const resultText = `${signal.title} ${signal.snippet}`.toLowerCase()
+  const matchedProblem = matchingTerms(input.problem, resultText)
+  const matchedAudience = matchingTerms(input.targetAudience, resultText)
+  const matchedSolution = matchingTerms(input.proposedSolution, resultText)
+  const matchedBusinessModel = matchingTerms(input.businessModel, resultText)
+  const matchedDifferentiators = matchingTerms(input.declaredDifferentiators, resultText)
+  const matches = [
+    ...matchedProblem,
+    ...matchedAudience,
+    ...matchedSolution,
+    ...matchedBusinessModel,
+    ...matchedDifferentiators,
+  ]
+  const uniqueMatches = Array.from(new Set(matches)).slice(0, 8)
+  const hasSpecificMatch = uniqueMatches.length >= 2 || /idea validation|business validation|open innovation|task marketplace|startup collaboration/i.test(resultText)
+  const similarityReason = hasSpecificMatch
+    ? `Combina com: ${uniqueMatches.join(', ')}.`
+    : 'Sem correspondência específica suficiente; resultado tratado como referência fraca.'
+  const noveltyImpactReason = signal.is_actual_investment_signal || signal.is_specific_startup_or_product
+    ? signal.similarity_score >= 45 && hasSpecificMatch
+      ? 'Pode reduzir novidade porque apresenta startup/produto/modelo público com semelhança relevante.'
+      : 'Sinal específico, mas sem correspondência suficiente para reduzir fortemente a novidade.'
+    : 'Não reduz novidade: referência genérica ou artigo sem sinal claro de startup/produto semelhante.'
+
+  return {
+    matched_problem: matchedProblem,
+    matched_audience: matchedAudience,
+    matched_solution: matchedSolution,
+    matched_business_model: matchedBusinessModel,
+    matched_differentiators: matchedDifferentiators,
+    similarity_reason: similarityReason,
+    novelty_impact_reason: noveltyImpactReason,
+  }
+}
+
+export function extractInvestmentSignalFields(result: NormalizedWebSearchResult) {
   const title = compact(result.title)
-  const snippet = compact([result.description, ...(result.extra_snippets || [])].join(' '))
+  const snippet = compact(result.snippet)
   const text = `${title} ${snippet}`
   const amountPattern = /(?:R\$|\$|US\$|USD|BRL|€)\s?\d+(?:[.,]\d+)?\s?(?:milhões|milhao|milhão|million|mi|m|k|mil)?/i
 
@@ -265,87 +472,130 @@ export function calculateInvestmentSignalScore(signal: Pick<InvestmentSignal, 's
   )
 }
 
-export function calculateInnovationPenaltyFromInvestmentSignal(signal: Pick<InvestmentSignal, 'investment_signal_score'>) {
+function calculateRelevanceAndStrength(signal: Pick<InvestmentSignal, 'similarity_score' | 'investment_signal_score' | 'source_category' | 'result_kind' | 'title' | 'snippet' | 'source_confidence'>) {
+  const text = `${signal.title} ${signal.snippet}`.toLowerCase()
+  const specificStartupOrProduct = /\b(profile|company|startup|produto|product|app|saas|platform|plataforma)\b/i.test(text) &&
+    !['tool_list_article', 'market_article', 'generic_content', 'unrelated'].includes(signal.result_kind)
+  const actualInvestmentSignal = /\b(raised|raises|funding|investment|investimento|captou|captação|captacao|rodada|seed|series|crowdfunding|portfolio|accelerator|venture|anjos)\b/i.test(text) ||
+    ['equity_crowdfunding', 'venture_capital', 'accelerator', 'angel_network', 'startup_database', 'market_intelligence'].includes(signal.source_category)
+  const generic = ['tool_list_article', 'market_article', 'generic_content'].includes(signal.result_kind)
+
+  if (signal.similarity_score >= 60 && (actualInvestmentSignal || specificStartupOrProduct) && !generic) {
+    return {
+      relevanceLevel: 'forte' as const,
+      evidenceStrength: signal.source_confidence >= 0.75 ? 'alta' as const : 'média' as const,
+      isActualInvestmentSignal: actualInvestmentSignal,
+      isSpecificStartupOrProduct: specificStartupOrProduct,
+    }
+  }
+
+  if (signal.similarity_score >= 40 && (actualInvestmentSignal || specificStartupOrProduct)) {
+    return {
+      relevanceLevel: 'médio' as const,
+      evidenceStrength: actualInvestmentSignal ? 'média' as const : 'baixa' as const,
+      isActualInvestmentSignal: actualInvestmentSignal,
+      isSpecificStartupOrProduct: specificStartupOrProduct,
+    }
+  }
+
+  if (signal.similarity_score >= 20 || generic) {
+    return {
+      relevanceLevel: 'fraco' as const,
+      evidenceStrength: 'baixa' as const,
+      isActualInvestmentSignal: actualInvestmentSignal && !generic,
+      isSpecificStartupOrProduct: specificStartupOrProduct && !generic,
+    }
+  }
+
+  return {
+    relevanceLevel: 'irrelevante' as const,
+    evidenceStrength: 'baixa' as const,
+    isActualInvestmentSignal: false,
+    isSpecificStartupOrProduct: false,
+  }
+}
+
+export function calculateInnovationPenaltyFromInvestmentSignal(
+  signal: Pick<InvestmentSignal, 'investment_signal_score' | 'relevance_level' | 'is_actual_investment_signal' | 'is_specific_startup_or_product'>,
+) {
+  if (
+    !['forte', 'médio'].includes(signal.relevance_level) ||
+    (!signal.is_actual_investment_signal && !signal.is_specific_startup_or_product)
+  ) {
+    return signal.relevance_level === 'fraco' ? Math.min(5, signal.investment_signal_score >= 40 ? 5 : 0) : 0
+  }
+
   if (signal.investment_signal_score >= 80) return 25
   if (signal.investment_signal_score >= 60) return 15
   if (signal.investment_signal_score >= 40) return 8
   return 0
 }
 
-function logInvestmentConnector(query: string, status: number | null, resultCount: number, error?: string) {
+function logInvestmentConnector(provider: ConfiguredWebSearchProvider, query: string, resultCount: number, error?: string) {
   if (process.env.NODE_ENV !== 'development') {
     return
   }
 
   console.log('[business-validation-investment]', {
     source: 'investment_signals',
+    configuredProvider: provider,
     query,
-    httpStatus: status,
     resultCount,
     error: error || null,
   })
 }
 
-async function searchBraveInvestmentQuery(query: string) {
-  const response = await fetch(
-    `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,
-    {
-      headers: {
-        Accept: 'application/json',
-        'X-Subscription-Token': process.env.BRAVE_SEARCH_API_KEY || '',
-      },
-    },
-  )
-  const text = await response.text()
-
-  if (!response.ok) {
-    const error = new Error(`HTTP ${response.status}: ${text}`)
-    ;(error as Error & { httpStatus?: number }).httpStatus = response.status
-    throw error
-  }
-
-  return {
-    data: text ? JSON.parse(text) as { web?: { results?: BraveResult[] } } : {},
-    httpStatus: response.status,
-  }
-}
-
-export async function searchInvestmentSignalsWithBrave(
+export async function searchInvestmentSignals(
   input: BusinessValidationInput,
   queries = generateInvestmentSignalQueries(input),
 ): Promise<InvestmentSignalSearchResult> {
-  if (!process.env.BRAVE_SEARCH_API_KEY) {
+  const configuredProvider = getConfiguredWebSearchProvider()
+
+  if (configuredProvider === 'not_configured') {
     return {
-      queries,
+      queries: [],
       signals: [],
       status: {
         source_type: 'investment_signals',
         attempted: false,
         success: false,
         result_count: 0,
-        error_message: 'BRAVE_SEARCH_API_KEY not configured',
+        error_message: 'No web search provider configured',
       },
       connectorErrors: [],
       innovationPenaltyApplied: 0,
       sourcesConsulted: [],
+      configuredProvider,
+      queriesGenerated: queries.length,
+      queriesExecuted: 0,
+      rawResultsBeforeDedup: 0,
+      resultsAfterDedup: 0,
+      requestBudgetUsed: `0/${MAX_INVESTMENT_QUERIES_PER_RUN}`,
     }
   }
 
   const connectorErrors: string[] = []
-  const rawResults: BraveResult[] = []
+  const rawResults: NormalizedWebSearchResult[] = []
+  const queryCache = new Map<string, NormalizedWebSearchResult[]>()
+  const selectedQueries = selectInvestmentQueriesForRun(queries, input)
 
-  for (const query of queries.slice(0, 12)) {
+  for (const query of selectedQueries) {
     try {
-      const { data, httpStatus } = await searchBraveInvestmentQuery(query.query_text)
-      const results = (data.web?.results || []).slice(0, 5)
+      const cachedResults = queryCache.get(query.query_text)
+      const results = cachedResults || (await runConfiguredWebSearch(query.query_text)).results
+
+      if (!cachedResults) {
+        queryCache.set(query.query_text, results)
+      }
+
       rawResults.push(...results)
-      logInvestmentConnector(query.query_text, httpStatus, results.length)
+      logInvestmentConnector(configuredProvider, query.query_text, results.length)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Investment signal search failed.'
       connectorErrors.push(message)
       logInvestmentConnector(
+        configuredProvider,
         query.query_text,
-        error instanceof Error ? (error as Error & { httpStatus?: number }).httpStatus || null : null,
         0,
         message,
       )
@@ -363,6 +613,7 @@ export async function searchInvestmentSignalsWithBrave(
       }
 
       seenUrls.add(sourceUrl)
+      const identity = extractCandidateIdentity(result)
       const source = classifyInvestmentSource(sourceUrl, fields.title, fields.snippet)
       const similarityScore = calculateSimilarityScore(input, {
         name: fields.startup_name || fields.title || 'Investment signal',
@@ -378,7 +629,7 @@ export async function searchInvestmentSignalsWithBrave(
         startup_name: fields.startup_name,
         source_url: sourceUrl,
         title: fields.title || 'Resultado público',
-        snippet: fields.snippet || '',
+        snippet: (fields.snippet || '').slice(0, 900),
         sector: null,
         problem: null,
         solution: null,
@@ -401,32 +652,81 @@ export async function searchInvestmentSignalsWithBrave(
         market_validation_signal: true,
         innovation_penalty: 0,
         source_confidence: source.confidence,
-        raw_payload: result,
+        provider: result.provider,
+        display_name: identity.display_name,
+        domain: identity.domain,
+        result_kind: source.resultKind,
+        relevance_level: 'fraco',
+        evidence_strength: 'baixa',
+        is_actual_investment_signal: false,
+        is_specific_startup_or_product: false,
+        matched_problem: [],
+        matched_audience: [],
+        matched_solution: [],
+        matched_business_model: [],
+        matched_differentiators: [],
+        similarity_reason: '',
+        novelty_impact_reason: '',
+        raw_payload: result.raw,
         collected_at: nowIso(),
       }
       const investmentSignalScore = calculateInvestmentSignalScore(baseSignal)
+      const relevance = calculateRelevanceAndStrength({
+        ...baseSignal,
+        investment_signal_score: investmentSignalScore,
+      })
+      const explanation = explainInvestmentSimilarity({
+        ...baseSignal,
+        is_actual_investment_signal: relevance.isActualInvestmentSignal,
+        is_specific_startup_or_product: relevance.isSpecificStartupOrProduct,
+      }, input)
       const signal: InvestmentSignal = {
         ...baseSignal,
         investment_signal_score: investmentSignalScore,
-        innovation_penalty: calculateInnovationPenaltyFromInvestmentSignal({ investment_signal_score: investmentSignalScore }),
+        relevance_level: relevance.relevanceLevel,
+        evidence_strength: relevance.evidenceStrength,
+        is_actual_investment_signal: relevance.isActualInvestmentSignal,
+        is_specific_startup_or_product: relevance.isSpecificStartupOrProduct,
+        matched_problem: explanation.matched_problem,
+        matched_audience: explanation.matched_audience,
+        matched_solution: explanation.matched_solution,
+        matched_business_model: explanation.matched_business_model,
+        matched_differentiators: explanation.matched_differentiators,
+        similarity_reason: explanation.similarity_reason,
+        novelty_impact_reason: explanation.novelty_impact_reason,
+        innovation_penalty: 0,
       }
 
-      return [signal]
+      return [
+        {
+          ...signal,
+          innovation_penalty: calculateInnovationPenaltyFromInvestmentSignal(signal),
+        },
+      ]
     })
     .sort((a, b) => b.investment_signal_score - a.investment_signal_score)
+    .slice(0, MAX_TOTAL_INVESTMENT_RESULTS)
 
   return {
-    queries,
+    queries: selectedQueries,
     signals,
     status: {
       source_type: 'investment_signals',
       attempted: true,
-      success: connectorErrors.length < queries.length,
+      success: connectorErrors.length < selectedQueries.length,
       result_count: signals.length,
       error_message: connectorErrors.length > 0 ? connectorErrors.slice(0, 3).join(' | ') : null,
     },
     connectorErrors,
     innovationPenaltyApplied: Math.min(35, Math.max(0, ...signals.map((signal) => signal.innovation_penalty))),
     sourcesConsulted: Array.from(new Set(signals.map((signal) => signal.source_platform))),
+    configuredProvider,
+    queriesGenerated: queries.length,
+    queriesExecuted: selectedQueries.length,
+    rawResultsBeforeDedup: rawResults.length,
+    resultsAfterDedup: signals.length,
+    requestBudgetUsed: `${selectedQueries.length}/${MAX_INVESTMENT_QUERIES_PER_RUN}`,
   }
 }
+
+export const searchInvestmentSignalsWithBrave = searchInvestmentSignals

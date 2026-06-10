@@ -39,6 +39,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
    - `supabase/business_validation_sources_update.sql` to add source metadata for external validation evidence.
    - `supabase/business_validation_connector_status.sql` to store connector execution status for each validation run.
    - `supabase/business_validation_investment_signals.sql` to store investment and fundraising evidence signals.
+   - `supabase/business_validation_investment_explainability.sql` to add readable classification, similarity explanations and novelty-impact fields for investment signals.
    - `supabase/colabai_assist_lite.sql` to add ColabAI Assist Lite credits, prompts, feature flags and usage logs.
 4. Start the app with `npm run dev`, `yarn dev`, or `pnpm dev` once Node.js is installed.
 
@@ -49,6 +50,7 @@ Configure these environment variables for the GitHub contribution flow:
 - `GITHUB_TOKEN` — required to merge Pull Requests from the review screen, useful for higher GitHub API limits, and optional for Business Validation GitHub searches.
 - `GITHUB_WEBHOOK_SECRET` — required for signed GitHub webhook verification in production.
 - `BRAVE_SEARCH_API_KEY` — optional; enables broader web search in the Business Validation MVP.
+- `TAVILY_API_KEY` — optional; preferred provider for the Business Validation investment/fundraising layer.
 
 For each project repository, create a GitHub webhook pointing to:
 
@@ -132,7 +134,7 @@ Previous validation history is shown only as history, not as competitor evidence
 
 ## Investment & Fundraising Signals
 
-The Business Validation module also has an investment and fundraising evidence layer. When `BRAVE_SEARCH_API_KEY` is configured, it searches public web results for similar startups or business models in investment platforms, equity crowdfunding platforms, angel networks, accelerators, VC sources, startup databases, market intelligence pages and fundraising-related public pages.
+The Business Validation module also has an investment and fundraising evidence layer. When a web search provider is configured, it searches public web results for similar startups or business models in investment platforms, equity crowdfunding platforms, angel networks, accelerators, VC sources, startup databases, market intelligence pages and fundraising-related public pages.
 
 Examples of targeted sources include Captable, EqSeed, SMU/StartMeUp, Kria, Wiztartup, Anjos do Brasil, Bossa Invest, ACE, WOW Aceleradora, Distrito, StartSe, Latitud, ABStartups, ABVCAP, CVM public sources, Sling Hub, Crunchbase, PitchBook, CB Insights, Dealroom and Tracxn.
 
@@ -140,7 +142,42 @@ This layer matters for the innovation criterion because a similar startup appear
 
 Important: an investment listing is a market validation signal, not a success guarantee. The app must not claim that a startup raised money unless that appears explicitly in the public search result or snippet.
 
-`BRAVE_SEARCH_API_KEY` is required for this layer. Without it, the UI shows the investment layer as not configured and no fallback investment signals are generated.
+Provider priority for this layer:
+
+1. Tavily, when `TAVILY_API_KEY` exists.
+2. Google Custom Search, when `GOOGLE_CUSTOM_SEARCH_API_KEY` and `GOOGLE_CUSTOM_SEARCH_ENGINE_ID` exist.
+3. SerpAPI, when `SERPAPI_KEY` exists.
+4. Brave Search, when `BRAVE_SEARCH_API_KEY` exists.
+
+To configure Tavily locally:
+
+```bash
+TAVILY_API_KEY=tvly-...
+```
+
+After changing `.env.local`, restart the dev server so Next.js reloads server-side environment variables.
+
+Without a configured provider, the UI shows the investment layer as not configured and no fallback investment signals are generated. Use `GET /api/business-validation/test-investment-signals` to verify which provider the server sees; the endpoint never returns API key values.
+
+## Controlling external search usage
+
+Tavily and other web search providers may consume paid quota per search request. The Business Validation MVP intentionally limits investment/fundraising searches to avoid wasting credits while the feature is still stabilizing.
+
+Optional environment variables:
+
+```bash
+MAX_INVESTMENT_QUERIES_PER_RUN=3
+MAX_WEB_RESULTS_PER_QUERY=3
+MAX_TOTAL_INVESTMENT_RESULTS=10
+```
+
+Defaults:
+
+- Run at most 3 investment/fundraising queries per validation.
+- Request at most 3 web results per query.
+- Save at most 10 investment signal results total.
+
+Increase these limits only after the feature is stable and quota usage is understood. Restart the dev server after changing `.env.local`.
 
 ## API Endpoints
 

@@ -33,10 +33,14 @@ create table if not exists public.business_validation_investment_signals (
   market_validation_signal boolean default true,
   innovation_penalty int default 0,
   source_confidence numeric default 0.5,
+  provider text,
   raw_payload jsonb,
   collected_at timestamptz default now(),
   created_at timestamptz default now()
 );
+
+alter table public.business_validation_investment_signals
+  add column if not exists provider text;
 
 create index if not exists idx_business_validation_investment_signals_run_id
   on public.business_validation_investment_signals(validation_run_id);

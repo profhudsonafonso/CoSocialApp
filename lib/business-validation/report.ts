@@ -46,8 +46,34 @@ function listInvestmentSignals(signals: InvestmentSignal[]) {
   }
 
   return signals.slice(0, 8).map((signal) => (
-    `- **${signal.startup_name || signal.title}** (${signal.source_platform}, ${signal.source_category}): similaridade ${signal.similarity_score}/100, sinal de investimento ${signal.investment_signal_score}/100, penalidade de inovação ${signal.innovation_penalty}. ${signal.snippet}`
+    `- **${signal.display_name || signal.startup_name || signal.title}** (${signal.source_platform || signal.domain}, ${signal.relevance_level}): ${signal.similarity_reason}`
   ))
+}
+
+function compactReportText(value: string | null | undefined, maxLength = 180) {
+  const text = (value || '').replace(/\s+/g, ' ').trim()
+
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`
+}
+
+function investmentSignalsTable(signals: InvestmentSignal[]) {
+  if (signals.length === 0) {
+    return ['Nenhum sinal forte de investimento/captação foi encontrado nas fontes públicas consultadas.']
+  }
+
+  return [
+    '| Resultado | Fonte | Tipo | Relevância | Similaridade | Parte parecida da ideia | Impacto na novidade |',
+    '| --------- | ----- | ---- | ---------- | -----------: | ----------------------- | ------------------- |',
+    ...signals.map((signal) => [
+      compactReportText(signal.display_name || signal.startup_name || signal.title, 80),
+      compactReportText(signal.source_platform || signal.domain, 60),
+      compactReportText(`${signal.result_kind}/${signal.source_category}`, 60),
+      signal.relevance_level || 'fraco',
+      String(signal.similarity_score || 0),
+      compactReportText(signal.similarity_reason || 'Referência genérica.', 160),
+      compactReportText(signal.novelty_impact_reason || 'Não reduz novidade', 160),
+    ].join(' | ')).map((row) => `| ${row} |`),
+  ]
 }
 
 export function generateBusinessValidationMarkdown(
@@ -76,6 +102,8 @@ export function generateBusinessValidationMarkdown(
   const investmentStatus = sourceStatuses.find((status) => status.source_type === 'investment_signals')
   const investmentSources = Array.from(new Set(investmentSignals.map((signal) => signal.source_platform)))
   const strongInvestmentSignals = investmentSignals.filter((signal) => signal.investment_signal_score >= 70)
+  const meaningfulInvestmentSignals = investmentSignals.filter((signal) => ['forte', 'médio'].includes(signal.relevance_level))
+  const weakInvestmentSignals = investmentSignals.filter((signal) => !['forte', 'médio'].includes(signal.relevance_level))
   const investmentNote = strongInvestmentSignals.length > 0
     ? 'Foram encontrados sinais de mercado/investimento semelhantes. Isso não prova sucesso, mas indica que modelos parecidos já foram expostos a investidores ou plataformas públicas.'
     : ''
@@ -142,15 +170,24 @@ export function generateBusinessValidationMarkdown(
     ...listCandidates(candidates),
     '',
     '## Sinais de investimento e captação',
-    'Estar listado em uma plataforma de investimento ou captação não prova sucesso da startup. Porém, quando uma solução similar aparece nessas fontes, isso é um sinal de que o modelo já tem presença pública no mercado e deve ser considerado no critério de inovação.',
+    'Esta camada procura startups, produtos ou modelos semelhantes em fontes de investimento, aceleração, crowdfunding, bases de startups e conteúdos públicos. Estar listado nessas fontes não prova sucesso, mas pode indicar que um modelo parecido já tem presença pública.',
     `- Fontes consultadas com resultado: ${investmentSources.length > 0 ? investmentSources.join(', ') : 'nenhuma'}.`,
     `- Sinais encontrados: ${investmentSignals.length}.`,
     `- Penalidade de inovação aplicada: ${investmentPenaltyApplied}.`,
-    investmentSignals.length > 0
+    meaningfulInvestmentSignals.length > 0
       ? 'Isso reduz a novidade percebida da ideia e exige diferenciação mais clara.'
       : 'Nenhum sinal forte de investimento/captação foi encontrado nas fontes públicas consultadas.',
     '',
-    ...listInvestmentSignals(investmentSignals),
+    ...investmentSignalsTable(investmentSignals),
+    '',
+    '### Principais sinais fortes',
+    ...listInvestmentSignals(meaningfulInvestmentSignals),
+    '',
+    '### Resultados fracos ou genéricos',
+    ...listInvestmentSignals(weakInvestmentSignals),
+    weakInvestmentSignals.length > 0
+      ? 'Resultados fracos ou genéricos ajudam como referência de mercado, mas não reduzem fortemente a novidade.'
+      : '',
     '',
     '## Projetos open-source encontrados',
     ...listCandidates(bySource(candidates, 'github')),
