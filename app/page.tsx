@@ -21,6 +21,7 @@ import {
   BrainCircuit,
   Scale,
   BarChart3,
+  HandCoins,
   ChevronRight,
   Menu,
   X
@@ -157,6 +158,7 @@ const toolkitSteps = [
   { icon: Calculator, title: "Medir contribuição", description: "Revise entregas e pontue com ColabScore.", action: "Revisar tarefas", href: "/responsavel/revisar" },
   { icon: Scale, title: "Organizar participação e documentos", description: "Entenda direitos, diluição, propriedade intelectual e documentos iniciais.", action: "Abrir Legal & Equity", href: "/legal-equity" },
   { icon: BarChart3, title: "Medir maturidade e prontidão para investimento", description: "Acompanhe indicadores técnicos, comerciais, financeiros e societários.", action: "Abrir Maturity Hub", href: "/maturity-investment" },
+  { icon: HandCoins, title: "Buscar editais e oportunidades de financiamento", description: "Filtre subvenções, aceleração, grants e chamadas públicas compatíveis.", action: "Buscar oportunidades", href: "/funding-opportunities" },
   { icon: Rocket, title: "Evoluir para MVP", description: "Use evidências e contribuição validada para avançar o produto.", action: "Ver guia", href: "#dashboard" },
 ]
 
@@ -1351,6 +1353,42 @@ function MaturityInvestmentHubSection() {
   )
 }
 
+function FundingOpportunitiesSection() {
+  return (
+    <section className="py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Card className="border-border bg-card">
+          <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="flex flex-col gap-3">
+              <Badge variant="outline" className="w-fit">
+                Oportunidades e editais
+              </Badge>
+              <div>
+                <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground md:text-3xl">
+                  <HandCoins className="h-7 w-7 text-primary" />
+                  Editais e Financiamento
+                </h2>
+                <p className="mt-2 max-w-3xl text-muted-foreground">
+                  Encontre editais, subvenções, aceleração e oportunidades compatíveis com seu projeto.
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  MVP demonstrativo com filtros, match score, favoritos, alertas simulados e checklist de submissão.
+                </p>
+              </div>
+            </div>
+            <Button className="bg-primary hover:bg-primary/90" asChild>
+              <a href="/funding-opportunities">
+                Buscar oportunidades
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
+
 function CTASection() {
   return (
     <section className="py-24 relative overflow-hidden">
@@ -1428,6 +1466,7 @@ export default function ColabSocialPage() {
       <ColabAiAssistSection />
       <LegalEquityHubSection />
       <MaturityInvestmentHubSection />
+      <FundingOpportunitiesSection />
       <ToolkitSection />
       <CTASection />
       <Footer />

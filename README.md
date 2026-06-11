@@ -142,6 +142,14 @@ The page includes technical, product, commercial, financial, legal/societary and
 
 This module does not provide investment advice and does not perform securities offerings. Future work includes integration with GitHub, ColabScore, Business Validation, Legal & Equity Hub, financial data, customer data and a controlled investor showcase.
 
+## Funding Opportunities Hub MVP
+
+`/funding-opportunities` is a demonstrative module for finding, filtering and preparing applications for funding opportunities, public calls, grants, acceleration programs and innovation challenges.
+
+This MVP currently uses simulated opportunities only. It supports client-side filters by area, state, funding value, opportunity type and startup stage. It shows a match score, detail panel, local saved opportunities, simulated e-mail alert preview and an interactive submission checklist.
+
+The module connects conceptually with Maturity & Investment Hub, Legal & Equity Hub and Business Validation. Future work includes a real curated opportunity database, saved alert preferences, real e-mail notifications, permitted APIs/RSS/crawlers and ColabAI summarization of edital PDFs and requirements.
+
 ## Validação de Negócio MVP
 
 `/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.
