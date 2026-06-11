@@ -134,6 +134,14 @@ The MVP includes:
 
 Future work includes real ColabScore integration, AI-generated draft documents, PDF export, accepted document tracking, electronic signature integration and a legal/accounting expert marketplace.
 
+## Maturity & Investment Hub MVP
+
+`/maturity-investment` is an educational and demonstrative module for measuring project/startup maturity. It currently uses simulated data to show a Startup Maturity Index from 0 to 100.
+
+The page includes technical, product, commercial, financial, legal/societary and investment readiness dimensions. It also includes a deterministic Investor Readiness Report demo, opportunities for improvement, investment readiness summaries and regulatory disclaimers.
+
+This module does not provide investment advice and does not perform securities offerings. Future work includes integration with GitHub, ColabScore, Business Validation, Legal & Equity Hub, financial data, customer data and a controlled investor showcase.
+
 ## Validação de Negócio MVP
 
 `/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.

@@ -20,6 +20,7 @@ import {
   Calculator,
   BrainCircuit,
   Scale,
+  BarChart3,
   ChevronRight,
   Menu,
   X
@@ -155,6 +156,7 @@ const toolkitSteps = [
   { icon: ClipboardList, title: "Executar tarefas", description: "Transforme aprendizado em issues, branches e pull requests.", action: "Ver projetos", href: "/contribuir/projetos" },
   { icon: Calculator, title: "Medir contribuição", description: "Revise entregas e pontue com ColabScore.", action: "Revisar tarefas", href: "/responsavel/revisar" },
   { icon: Scale, title: "Organizar participação e documentos", description: "Entenda direitos, diluição, propriedade intelectual e documentos iniciais.", action: "Abrir Legal & Equity", href: "/legal-equity" },
+  { icon: BarChart3, title: "Medir maturidade e prontidão para investimento", description: "Acompanhe indicadores técnicos, comerciais, financeiros e societários.", action: "Abrir Maturity Hub", href: "/maturity-investment" },
   { icon: Rocket, title: "Evoluir para MVP", description: "Use evidências e contribuição validada para avançar o produto.", action: "Ver guia", href: "#dashboard" },
 ]
 
@@ -1313,6 +1315,42 @@ function LegalEquityHubSection() {
   )
 }
 
+function MaturityInvestmentHubSection() {
+  return (
+    <section className="bg-card/50 py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Card className="border-primary/30 bg-card">
+          <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="flex flex-col gap-3">
+              <Badge variant="outline" className="w-fit">
+                Prontidão para captação
+              </Badge>
+              <div>
+                <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground md:text-3xl">
+                  <BarChart3 className="h-7 w-7 text-primary" />
+                  Maturity & Investment Hub
+                </h2>
+                <p className="mt-2 max-w-3xl text-muted-foreground">
+                  Meça a maturidade do projeto, acompanhe indicadores e prepare a startup para captação.
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  MVP demonstrativo para organizar evidências, riscos e próximos marcos.
+                </p>
+              </div>
+            </div>
+            <Button className="bg-primary hover:bg-primary/90" asChild>
+              <a href="/maturity-investment">
+                Abrir Maturity Hub
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
+
 function CTASection() {
   return (
     <section className="py-24 relative overflow-hidden">
@@ -1389,6 +1427,7 @@ export default function ColabSocialPage() {
       <DashboardSection />
       <ColabAiAssistSection />
       <LegalEquityHubSection />
+      <MaturityInvestmentHubSection />
       <ToolkitSection />
       <CTASection />
       <Footer />
