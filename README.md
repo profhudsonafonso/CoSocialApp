@@ -116,6 +116,24 @@ Security notes:
 - The context builder masks values that look like tokens, secrets, passwords, API keys or `.env` content.
 - `ai_usage_events` stores only metadata, not raw prompts or raw webhook payloads.
 
+## Legal & Equity Hub MVP
+
+`/legal-equity` is an educational MVP for project owners and collaborators to understand estimated participation, rights, legal documents, cap table, dilution, intellectual property and future investor scenarios.
+
+It is educational only and does not provide legal advice or promise legal validity. Professional legal, accounting and tax review is required before any signature, equity grant, profit distribution or company formation.
+
+The MVP includes:
+
+- Cap table and dilution simulation.
+- Profit distribution simulation.
+- Educational document cards and previews.
+- Collaborator rights example.
+- Project governance checklist.
+- Demonstrative legal-societary agent actions.
+- Legal limitations and safety notes.
+
+Future work includes real ColabScore integration, AI-generated draft documents, PDF export, accepted document tracking, electronic signature integration and a legal/accounting expert marketplace.
+
 ## Validação de Negócio MVP
 
 `/validar-negocio` is an initial business validation module for project owners. It generates suggested search queries, initial competitor hypotheses, novelty/risk/differentiation scores, and a critical report.

@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Calculator,
   BrainCircuit,
+  Scale,
   ChevronRight,
   Menu,
   X
@@ -125,6 +126,7 @@ const navLinks = [
   { href: "#colabscore", label: "ColabScore" },
   { href: "#dashboard", label: "Dashboard" },
   { href: "/colabai", label: "ColabAI" },
+  { href: "/legal-equity", label: "Legal" },
   { href: "#toolkit", label: "Toolkit" },
 ]
 
@@ -152,6 +154,7 @@ const toolkitSteps = [
   { icon: UsersRound, title: "Formar equipe", description: "Encontre colaboradores e organize papéis para executar.", action: "Colaborar", href: "#colaborar" },
   { icon: ClipboardList, title: "Executar tarefas", description: "Transforme aprendizado em issues, branches e pull requests.", action: "Ver projetos", href: "/contribuir/projetos" },
   { icon: Calculator, title: "Medir contribuição", description: "Revise entregas e pontue com ColabScore.", action: "Revisar tarefas", href: "/responsavel/revisar" },
+  { icon: Scale, title: "Organizar participação e documentos", description: "Entenda direitos, diluição, propriedade intelectual e documentos iniciais.", action: "Abrir Legal & Equity", href: "/legal-equity" },
   { icon: Rocket, title: "Evoluir para MVP", description: "Use evidências e contribuição validada para avançar o produto.", action: "Ver guia", href: "#dashboard" },
 ]
 
@@ -1274,6 +1277,42 @@ function ColabAiAssistSection() {
   )
 }
 
+function LegalEquityHubSection() {
+  return (
+    <section className="py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Card className="border-border bg-card">
+          <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="flex flex-col gap-3">
+              <Badge variant="outline" className="w-fit">
+                Educação jurídica e societária
+              </Badge>
+              <div>
+                <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground md:text-3xl">
+                  <Scale className="h-7 w-7 text-primary" />
+                  Legal & Equity Hub
+                </h2>
+                <p className="mt-2 max-w-3xl text-muted-foreground">
+                  Entenda participação, direitos, documentos, diluição e cenários futuros do projeto.
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Conteúdo educativo para organizar decisões antes da formalização jurídica.
+                </p>
+              </div>
+            </div>
+            <Button className="bg-primary hover:bg-primary/90" asChild>
+              <a href="/legal-equity">
+                Abrir Legal & Equity Hub
+                <ChevronRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  )
+}
+
 function CTASection() {
   return (
     <section className="py-24 relative overflow-hidden">
@@ -1349,6 +1388,7 @@ export default function ColabSocialPage() {
       <ColabScoreSection />
       <DashboardSection />
       <ColabAiAssistSection />
+      <LegalEquityHubSection />
       <ToolkitSection />
       <CTASection />
       <Footer />
