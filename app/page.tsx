@@ -28,6 +28,10 @@ import {
 } from "lucide-react"
 import { BrandLogo } from "@/components/BrandLogo"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { FeatureCarousel } from "@/components/home/FeatureCarousel"
+import { ModuleStageCards } from "@/components/home/ModuleStageCards"
+import { PlatformFlow } from "@/components/home/PlatformFlow"
+import { QuickAccessGrid } from "@/components/home/QuickAccessGrid"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -125,6 +129,7 @@ interface DashboardData {
 
 const navLinks = [
   { href: "#como-funciona", label: "Como Funciona" },
+  { href: "#modules", label: "Módulos" },
   { href: "#colabscore", label: "ColabScore" },
   { href: "#dashboard", label: "Dashboard" },
   { href: "/colabai", label: "ColabAI" },
@@ -264,28 +269,27 @@ function HeroSection() {
         </div>
         
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 text-balance leading-tight">
-          ColabSocial: transforme{" "}
-          <span className="text-primary">colaboração</span> em{" "}
-          <span className="text-secondary">participação</span>.
+          CoSocial transforma ideias em{" "}
+          <span className="text-primary">projetos colaborativos</span>, evidências e{" "}
+          <span className="text-secondary">oportunidades reais</span>.
         </h1>
         
         <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto mb-10 text-pretty leading-relaxed">
-          A ColabSocial conecta ideias, talentos e oportunidades para transformar colaboração em MVPs, 
-          produtos e novas startups, usando o ColabScore: um sistema transparente de pontuação e 
-          recompensa por contribuição.
+          Cadastre uma ideia, valide o negócio, conecte colaboradores, execute tarefas, registre evidências,
+          calcule ColabScore e prepare o projeto para maturidade, governança e financiamento.
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 text-lg" asChild>
             <a href="#cadastrar-ideia">
               <Lightbulb className="mr-2 h-5 w-5" />
-              Quero cadastrar uma ideia
+              Começar uma ideia
             </a>
           </Button>
           <Button size="lg" variant="outline" className="border-secondary text-secondary hover:bg-secondary/10 px-8 py-6 text-lg" asChild>
-            <a href="#colaborar">
-              <Users className="mr-2 h-5 w-5" />
-              Quero colaborar com projetos
+            <a href="#modules">
+              <ClipboardList className="mr-2 h-5 w-5" />
+              Ver módulos disponíveis
             </a>
           </Button>
         </div>
@@ -1457,16 +1461,16 @@ export default function ColabSocialPage() {
     <main className="min-h-screen">
       <Navbar />
       <HeroSection />
+      <FeatureCarousel />
+      <QuickAccessGrid />
+      <PlatformFlow />
+      <ModuleStageCards />
       <HowItWorksSection />
       <IdeaFormSection />
       <CollaboratorFormSection />
       <DatabasePreviewSection />
       <ColabScoreSection />
       <DashboardSection />
-      <ColabAiAssistSection />
-      <LegalEquityHubSection />
-      <MaturityInvestmentHubSection />
-      <FundingOpportunitiesSection />
       <ToolkitSection />
       <CTASection />
       <Footer />

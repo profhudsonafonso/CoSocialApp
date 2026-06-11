@@ -193,6 +193,18 @@ After changing `.env.local`, restart the dev server so Next.js reloads server-si
 
 Without a configured provider, the UI shows the investment layer as not configured and no fallback investment signals are generated. Use `GET /api/business-validation/test-investment-signals` to verify which provider the server sees; the endpoint never returns API key values.
 
+## Home page organization
+
+The home page includes a feature carousel near the top to explain the full CoSocial journey: idea registration, Business Validation, squad formation, GitHub task execution, evidence capture, ColabScore, Legal & Equity, Maturity Hub, and funding or investment opportunities.
+
+The first carousel card shows the full CoSocial journey with the visual flow image from `public/home/cosocial-flow.png`.
+
+Module cards now use feature-specific visual illustrations stored in `public/home/feature-cards/`: `card2.png` for Business Validation, `card3.png` for GitHub task flow, `card4.png` for ColabScore, `card5.png` for ColabAI, `card6.png` for Legal & Equity, `card7.png` for Maturity Hub, and `card8.png` for Funding Opportunities.
+
+It also groups modules by user intention so visitors can quickly choose whether they want to register an idea, contribute to a project, review deliveries, configure ColabScore, use ColabAI, prepare legal/equity materials, measure maturity, or search funding opportunities.
+
+Main module links from the home page point to Business Validation (`/validar-negocio`), GitHub task flow (`/contribuir/projetos`), owner review (`/responsavel/revisar`), ColabScore (`/responsavel/colabscore`), ColabAI (`/colabai`), Legal & Equity (`/legal-equity`), Maturity Hub (`/maturity-investment`), and Funding Opportunities (`/funding-opportunities`).
+
 ## Controlling external search usage
 
 Tavily and other web search providers may consume paid quota per search request. The Business Validation MVP intentionally limits investment/fundraising searches to avoid wasting credits while the feature is still stabilizing.
